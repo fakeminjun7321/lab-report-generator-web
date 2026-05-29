@@ -4,11 +4,43 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>개인정보처리방침</title>
+    <script>
+      // FOUC 방지: CSS 적용 전에 테마를 먼저 설정한다.
+      (function () {
+        try {
+          var t = localStorage.getItem("theme");
+          if (!t)
+            t = window.matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light";
+          document.documentElement.setAttribute("data-theme", t);
+        } catch (e) {}
+      })();
+    </script>
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
+    <div class="app-bar">
+      <a href="/" class="brand">
+        <span class="brand-mark" aria-hidden="true">R</span>
+        보고서 작성 툴
+      </a>
+      <div class="header-actions">
+        <button
+          type="button"
+          id="themeToggle"
+          class="theme-toggle"
+          aria-label="다크 모드로 전환"
+          title="다크 모드로 전환"
+        >
+          <span class="theme-icon-light" aria-hidden="true">🌙</span>
+          <span class="theme-icon-dark" aria-hidden="true">☀️</span>
+        </button>
+      </div>
+    </div>
+
     <main class="legal-page">
-      <p><a href="/">← 보고서 작성 툴로 돌아가기</a></p>
+      <a href="/" class="legal-back">← 보고서 작성 툴로 돌아가기</a>
       <h1>개인정보처리방침</h1>
       <p class="hint">시행일: 2026년 5월 1일</p>
 
@@ -123,12 +155,19 @@
       </section>
     </main>
     <footer class="site-footer">
-      <a href="/terms.html">이용약관</a>
-      <a href="/privacy.html">개인정보처리방침</a>
-      <a href="/refund.html">환불정책</a>
-      <a href="/changelog.html">패치노트</a>
-      <span class="site-version" data-site-version>버전 확인 중...</span>
+      <div class="footer-links">
+        <a href="/terms.html">이용약관</a>
+        <a href="/privacy.html">개인정보처리방침</a>
+        <a href="/refund.html">환불정책</a>
+        <a href="/changelog.html">패치노트</a>
+        <a href="https://github.com/fakeminjun7321/lab-report-generator-web" target="_blank" rel="noopener">GitHub</a>
+      </div>
+      <div class="footer-copy">
+        © 2026 Lab Report Generator Web · MIT License ·
+        <span class="site-version" data-site-version>버전 확인 중...</span>
+      </div>
     </footer>
     <script src="/version-footer.js"></script>
+    <script src="/theme.js"></script>
   </body>
 </html>
