@@ -4,98 +4,144 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>관리자 — 보고서 작성 툴</title>
+    <script>
+      // FOUC 방지: CSS 적용 전에 테마를 먼저 설정한다.
+      (function () {
+        try {
+          var t = localStorage.getItem("theme");
+          if (!t)
+            t = window.matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light";
+          document.documentElement.setAttribute("data-theme", t);
+        } catch (e) {}
+      })();
+    </script>
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
-    <p class="topbar">
-      <a href="/">메인으로</a>
-      <a href="#" id="logout">로그아웃</a>
-    </p>
-    <h1>관리자 페이지</h1>
-    <p class="notice">
-      사용자 계정 발급 전 만 14세 이상 여부와 이용약관·개인정보처리방침·환불정책 동의 여부를 확인하세요.
-    </p>
-    <p id="rateInfo" style="color: #666; font-size: 0.9em">환율 로딩 중...</p>
+    <header class="app-header">
+      <div class="app-bar">
+        <a href="/" class="brand">
+          <span class="brand-mark" aria-hidden="true">R</span>
+          관리자
+        </a>
+        <div class="header-actions">
+          <a href="/">메인으로</a>
+          <a href="#" id="logout">로그아웃</a>
+          <button
+            type="button"
+            id="themeToggle"
+            class="theme-toggle"
+            aria-label="다크 모드로 전환"
+            title="다크 모드로 전환"
+          >
+            <span class="theme-icon-light" aria-hidden="true">🌙</span>
+            <span class="theme-icon-dark" aria-hidden="true">☀️</span>
+          </button>
+        </div>
+      </div>
+      <div class="app-hero">
+        <h1>관리자 페이지</h1>
+        <div class="notice">
+          사용자 계정 발급 전 만 14세 이상 여부와 이용약관·개인정보처리방침·환불정책 동의 여부를 확인하세요.
+        </div>
+        <p id="rateInfo" class="hint">환율 로딩 중...</p>
+      </div>
+    </header>
 
-    <h2>사용자 추가</h2>
-    <form id="addForm">
-      <p>
-        이름: <input id="name" required maxlength="50" />
-      </p>
-      <p>
-        비밀번호: <input id="password" type="text" required minlength="5" />
-        <small>(평문 입력, 해시되어 저장됨. 최소 5자)</small>
-      </p>
-      <p>
-        <small style="color: #888">충전은 사용자 추가 후 사용자 목록의 ‘+ 충전’ 버튼으로 진행하세요.</small>
-      </p>
-      <p>
-        <label><input id="isAdmin" type="checkbox" /> 관리자 권한</label>
-      </p>
-      <p>
-        <button type="submit">추가</button>
-        <span id="addStatus" style="color: green; margin-left: 10px"></span>
-      </p>
-    </form>
+    <section class="settings-card">
+      <h2>사용자 추가</h2>
+      <form id="addForm" class="compact-form">
+        <div class="field">
+          <label>
+            <span class="field-label">이름</span>
+            <input id="name" required maxlength="50" />
+          </label>
+        </div>
+        <div class="field">
+          <label>
+            <span class="field-label">비밀번호</span>
+            <input id="password" type="text" required minlength="5" />
+          </label>
+          <small>평문 입력, 해시되어 저장됨. 최소 5자.</small>
+        </div>
+        <small>충전은 사용자 추가 후 사용자 목록의 ‘+ 충전’ 버튼으로 진행하세요.</small>
+        <label class="check-line"><input id="isAdmin" type="checkbox" /> 관리자 권한</label>
+        <div class="form-actions">
+          <span id="addStatus" class="inline-status"></span>
+          <button type="submit">추가</button>
+        </div>
+      </form>
+    </section>
 
-    <hr />
+    <section class="settings-card">
+      <div class="card-head">
+        <h2>사용자 목록</h2>
+        <button id="refresh" class="secondary compact">새로고침</button>
+      </div>
+      <div class="table-wrapper">
+        <table id="userTable">
+          <thead>
+            <tr>
+              <th>이름</th>
+              <th>사전 잔액</th>
+              <th>결과 잔액</th>
+              <th>누적 사용</th>
+              <th>관리자</th>
+              <th>시간당</th>
+              <th>가입일</th>
+              <th>조작</th>
+            </tr>
+          </thead>
+          <tbody id="userTbody"></tbody>
+        </table>
+      </div>
+      <p id="listStatus" class="hint"></p>
+    </section>
 
-    <h2>사용자 목록</h2>
-    <button id="refresh" class="secondary">새로고침</button>
-    <div class="table-wrapper">
-      <table id="userTable" border="1" cellpadding="6" cellspacing="0" style="margin-top: 8px; border-collapse: collapse; font-size: 13px">
-        <thead style="background: #eee">
-          <tr>
-            <th>이름</th>
-            <th>사전 잔액</th>
-            <th>결과 잔액</th>
-            <th>누적 사용</th>
-            <th>관리자</th>
-            <th>시간당</th>
-            <th>가입일</th>
-            <th>조작</th>
-          </tr>
-        </thead>
-        <tbody id="userTbody"></tbody>
-      </table>
-    </div>
-    <p id="listStatus" style="color: #666; font-size: 0.9em"></p>
-
-    <hr />
-
-    <h2>보고서 생성 로그</h2>
-    <p style="color: #666; font-size: 0.9em">
-      누가 언제 어떤 보고서를 만들었는지 기록. 최근 100건 표시.
-      <button id="refreshLogs" class="secondary">새로고침</button>
-    </p>
-    <div class="table-wrapper">
-      <table id="logTable" border="1" cellpadding="6" cellspacing="0" style="margin-top: 8px; border-collapse: collapse; font-size: 13px">
-        <thead style="background: #eee">
-          <tr>
-            <th>시각</th>
-            <th>사용자</th>
-            <th>종류</th>
-            <th>모델</th>
-            <th>보고서 제목</th>
-            <th>비용</th>
-            <th>토큰</th>
-            <th>웹검색</th>
-          </tr>
-        </thead>
-        <tbody id="logTbody"></tbody>
-      </table>
-    </div>
-    <p id="logStatus" style="color: #666; font-size: 0.9em"></p>
+    <section class="settings-card">
+      <div class="card-head">
+        <h2>보고서 생성 로그</h2>
+        <button id="refreshLogs" class="secondary compact">새로고침</button>
+      </div>
+      <p class="hint">누가 언제 어떤 보고서를 만들었는지 기록. 최근 100건 표시.</p>
+      <div class="table-wrapper">
+        <table id="logTable">
+          <thead>
+            <tr>
+              <th>시각</th>
+              <th>사용자</th>
+              <th>종류</th>
+              <th>모델</th>
+              <th>보고서 제목</th>
+              <th>비용</th>
+              <th>토큰</th>
+              <th>웹검색</th>
+            </tr>
+          </thead>
+          <tbody id="logTbody"></tbody>
+        </table>
+      </div>
+      <p id="logStatus" class="hint"></p>
+    </section>
 
     <footer class="site-footer">
-      <a href="/terms.html">이용약관</a>
-      <a href="/privacy.html">개인정보처리방침</a>
-      <a href="/refund.html">환불정책</a>
-      <a href="/changelog.html">패치노트</a>
-      <span class="site-version" data-site-version>버전 확인 중...</span>
+      <div class="footer-links">
+        <a href="/terms.html">이용약관</a>
+        <a href="/privacy.html">개인정보처리방침</a>
+        <a href="/refund.html">환불정책</a>
+        <a href="/changelog.html">패치노트</a>
+        <a href="https://github.com/fakeminjun7321/lab-report-generator-web" target="_blank" rel="noopener">GitHub</a>
+      </div>
+      <div class="footer-copy">
+        © 2026 Lab Report Generator Web · MIT License ·
+        <span class="site-version" data-site-version>버전 확인 중...</span>
+      </div>
     </footer>
 
     <script src="/version-footer.js"></script>
+    <script src="/theme.js"></script>
     <script>
       let krwPerUsd = 1400;
 
@@ -150,7 +196,8 @@
         const v = Number(usd) || 0;
         const count = unitUsd > 0 ? Math.floor(v / unitUsd) : 0;
         const krw = Math.round(v * krwPerUsd).toLocaleString();
-        const color = count === 0 ? "red" : count <= 1 ? "orange" : "black";
+        const color =
+          count === 0 ? "var(--danger)" : count <= 1 ? "var(--warning)" : "var(--text)";
         return `<span style="color: ${color}">${count}건 ($${v.toFixed(3)} ≈ ₩${krw})</span>`;
       }
 
@@ -163,10 +210,10 @@
           const isAdmin = !!u.is_admin;
           const isLocked = !isAdmin && count >= limit;
           const rateText = isAdmin
-            ? '<span style="color: #888">무제한</span>'
-            : `<span style="color: ${isLocked ? "red" : count >= limit - 1 ? "orange" : "black"}">${count}/${limit}${isLocked ? " 🔒" : ""}</span>`;
+            ? '<span style="color: var(--text-muted)">무제한</span>'
+            : `<span style="color: ${isLocked ? "var(--danger)" : count >= limit - 1 ? "var(--warning)" : "var(--text)"}">${count}/${limit}${isLocked ? " 🔒" : ""}</span>`;
           const unlockBtn = isLocked
-            ? `<button data-act="unlock" data-id="${u.id}" style="color: blue">잠금 해제</button>`
+            ? `<button data-act="unlock" data-id="${u.id}" style="color: var(--accent-text)">잠금 해제</button>`
             : "";
           const tr = document.createElement("tr");
           tr.innerHTML = `
@@ -295,7 +342,7 @@
         e.preventDefault();
         const status = document.getElementById("addStatus");
         status.textContent = "처리 중...";
-        status.style.color = "#666";
+        status.style.color = "var(--text-muted)";
         const body = {
           name: document.getElementById("name").value,
           password: document.getElementById("password").value,
@@ -342,7 +389,7 @@
         tbody.innerHTML = "";
         if (!logs || logs.length === 0) {
           const tr = document.createElement("tr");
-          tr.innerHTML = `<td colspan="8" style="color: #888; text-align: center">아직 생성된 보고서가 없습니다.</td>`;
+          tr.innerHTML = `<td colspan="8" style="color: var(--text-muted); text-align: center">아직 생성된 보고서가 없습니다.</td>`;
           tbody.appendChild(tr);
           return;
         }
@@ -360,10 +407,10 @@
             <td>${formatTime(log.created_at)}</td>
             <td>${escape(log.user_name)}</td>
             <td style="font-size: 11px">${typeStr}</td>
-            <td style="font-size: 11px; color: #555">${modelStr}</td>
+            <td style="font-size: 11px; color: var(--text-muted)">${modelStr}</td>
             <td>${escape(meta.title || "(제목 없음)")}</td>
             <td>${fmtBoth(log.total_usd)}</td>
-            <td style="font-size: 11px; color: #555">${tokenStr}</td>
+            <td style="font-size: 11px; color: var(--text-muted)">${tokenStr}</td>
             <td style="text-align: center">${webStr}</td>
           `;
           tbody.appendChild(tr);
@@ -371,7 +418,7 @@
       }
 
       function shortType(type, label) {
-        if (!type) return '<span style="color:#aaa">사전*</span>'; // legacy 데이터
+        if (!type) return '<span style="color:var(--text-faint)">사전*</span>'; // legacy 데이터
         if (type === "chem-pre") return "사전";
         if (type === "chem-result") return "결과";
         if (type === "phys-result") return "물리";

@@ -4,23 +4,53 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>보고서 작성 툴</title>
+    <script>
+      // FOUC 방지: CSS 적용 전에 테마를 먼저 설정한다.
+      (function () {
+        try {
+          var t = localStorage.getItem("theme");
+          if (!t)
+            t = window.matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light";
+          document.documentElement.setAttribute("data-theme", t);
+        } catch (e) {}
+      })();
+    </script>
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
     <header class="app-header">
-      <p class="topbar">
-        <span id="user"></span>
-        <a href="/admin" id="adminLink" style="display: none">관리자</a>
-        <a href="#" id="logout">로그아웃</a>
-      </p>
+      <div class="app-bar">
+        <a href="/" class="brand">
+          <span class="brand-mark" aria-hidden="true">R</span>
+          보고서 작성 툴
+        </a>
+        <div class="header-actions">
+          <span id="user"></span>
+          <a href="/admin" id="adminLink" style="display: none">관리자</a>
+          <a href="#" id="logout">로그아웃</a>
+          <button
+            type="button"
+            id="themeToggle"
+            class="theme-toggle"
+            aria-label="다크 모드로 전환"
+            title="다크 모드로 전환"
+          >
+            <span class="theme-icon-light" aria-hidden="true">🌙</span>
+            <span class="theme-icon-dark" aria-hidden="true">☀️</span>
+          </button>
+        </div>
+      </div>
 
-      <h1>보고서 작성 툴</h1>
-
-      <div class="notice compliance-notice">
-        <strong>학습 보조 초안 생성 도구입니다.</strong>
-        본인이 이용 권한을 가진 파일만 업로드하고, 학교·교사 기준에서 AI 사용이 허용되는 범위인지 확인한 뒤 사용하세요.
-        생성 결과는 그대로 제출하지 말고 반드시 직접 검토·수정하세요.
-        업로드 파일은 AI 처리 과정에서 외부 처리업체로 전송될 수 있으며, 생성 파일은 24시간만 보관됩니다.
+      <div class="app-hero">
+        <h1>보고서 작성 툴</h1>
+        <div class="notice compliance-notice">
+          <strong>학습 보조 초안 생성 도구입니다.</strong>
+          본인이 이용 권한을 가진 파일만 업로드하고, 학교·교사 기준에서 AI 사용이 허용되는 범위인지 확인한 뒤 사용하세요.
+          생성 결과는 그대로 제출하지 말고 반드시 직접 검토·수정하세요.
+          업로드 파일은 AI 처리 과정에서 외부 처리업체로 전송될 수 있으며, 생성 파일은 24시간만 보관됩니다.
+        </div>
       </div>
     </header>
 
@@ -32,6 +62,15 @@
     </nav>
 
     <section id="reportsPanel" class="tab-panel active" data-tab-panel="reports">
+    <div class="app-banner">
+      <div class="app-banner-ico" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg>
+      </div>
+      <div>
+        <h2>보고서 만들기</h2>
+        <p>보고서 종류를 고르고 자료를 올리면 초안을 생성합니다. 결과는 반드시 직접 검토·수정해 사용하세요.</p>
+      </div>
+    </div>
     <div class="report-toolbar">
       <div id="balanceBox" class="balance-box" style="display: none">
         <strong>내 잔액</strong>
@@ -43,15 +82,21 @@
         <div id="reportTypeLegend" class="report-type-title">보고서 종류</div>
         <label>
           <input type="radio" name="reportType" value="chem-pre" checked />
-          화학 사전보고서
+          <span class="rt-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v6l-5.4 9.4A2 2 0 0 0 6.3 21h11.4a2 2 0 0 0 1.7-2.6L14 9V3"/><path d="M7.5 14h9"/></svg></span>
+          <span class="rt-title">화학 사전보고서</span>
+          <span class="rt-tag">매뉴얼 PDF → 사전보고서 초안</span>
         </label>
         <label>
           <input type="radio" name="reportType" value="chem-result" />
-          화학 결과보고서
+          <span class="rt-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><rect x="7" y="11" width="3" height="6" rx="0.5"/><rect x="12.5" y="7" width="3" height="10" rx="0.5"/><rect x="18" y="9" width="3" height="8" rx="0.5"/></svg></span>
+          <span class="rt-title">화학 결과보고서</span>
+          <span class="rt-tag">데이터·사진 → 결과 추가분</span>
         </label>
         <label>
           <input type="radio" name="reportType" value="phys-result" />
-          물리 결과보고서
+          <span class="rt-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1.6"/><ellipse cx="12" cy="12" rx="10" ry="4.4"/><ellipse cx="12" cy="12" rx="10" ry="4.4" transform="rotate(60 12 12)"/><ellipse cx="12" cy="12" rx="10" ry="4.4" transform="rotate(120 12 12)"/></svg></span>
+          <span class="rt-title">물리 결과보고서</span>
+          <span class="rt-tag">.cap·엑셀 → 결과보고서</span>
         </label>
       </div>
     </div>
@@ -63,285 +108,346 @@
 
     <!-- ── 화학 결과보고서 폼 (Phase 2 진행 중) ─────────────────────────── -->
     <form id="chemResultForm" class="report-form" data-report-form="chem-result" hidden>
-      <p>
-        <label>사전보고서 (PDF 권장, docx 가능) <strong>*</strong>:
-          <input id="crPreReport" name="preReport" type="file" accept=".pdf,.docx" required />
-        </label>
-      </p>
-      <p>
-        <label>실험 데이터 (엑셀·CSV·텍스트·사진, 선택):
-          <input id="crData" name="data" type="file" accept=".xlsx,.xls,.csv,.txt,.png,.jpg,.jpeg" />
-        </label>
-        <br>
-        <small>엑셀로 정리할 정도의 데이터가 없으면 AI 참고 메모에 관찰값·판단 근거를 적어도 됩니다.</small>
-      </p>
-      <p>
-        <label>실험 사진 (여러 장 가능, 선택):
-          <input id="crPhotos" name="photos" type="file" accept=".png,.jpg,.jpeg" multiple />
-        </label>
-      </p>
-      <p>
-        <label>실험 매뉴얼 PDF (선택):
-          <input id="crManual" name="manual" type="file" accept="application/pdf" />
-        </label>
-      </p>
-      <p class="user-notes-field">
-        <label>AI 참고 메모 / 내 의견 (선택):
-          <textarea id="crUserNotes" name="userNotes" rows="4" maxlength="12000" placeholder="예: 색 변화가 예상보다 늦게 나타났고, 마지막 적정값은 종말점 판단이 애매해서 오차 분석에 반영하고 싶음"></textarea>
-          <br>
-          <small>.md/.txt 파일로 길게 작성한 메모도 함께 첨부할 수 있습니다.</small><br>
-          <input id="crUserNotesFile" name="userNotesFile" type="file" accept=".md,.txt,text/markdown,text/plain" />
-        </label>
-      </p>
-      <p class="policy-check">
+      <div class="form-section">
+        <div class="form-section-head">
+          <span class="form-section-title">자료 업로드</span>
+        </div>
+        <div class="field">
+          <span class="field-label">사전보고서 (PDF 권장, docx 가능) <span class="req">*</span></span>
+          <div class="dropzone">
+            <input id="crPreReport" name="preReport" type="file" accept=".pdf,.docx" required aria-label="사전보고서 파일" />
+            <span class="dropzone-icon" aria-hidden="true">📄</span>
+            <span class="dropzone-title">사전보고서를 끌어다 놓거나 클릭</span>
+            <span class="dropzone-sub">.pdf · .docx</span>
+            <span class="dropzone-file" data-dz-file></span>
+          </div>
+        </div>
+        <div class="field-grid">
+          <div class="field">
+            <span class="field-label">실험 데이터 (선택)</span>
+            <div class="dropzone">
+              <input id="crData" name="data" type="file" accept=".xlsx,.xls,.csv,.txt,.png,.jpg,.jpeg" aria-label="실험 데이터 파일" />
+              <span class="dropzone-icon" aria-hidden="true">📊</span>
+              <span class="dropzone-title">엑셀·CSV·텍스트·사진</span>
+              <span class="dropzone-sub">없으면 아래 메모에 관찰값을 적어도 됩니다</span>
+              <span class="dropzone-file" data-dz-file></span>
+            </div>
+          </div>
+          <div class="field">
+            <span class="field-label">실험 사진 (여러 장, 선택)</span>
+            <div class="dropzone">
+              <input id="crPhotos" name="photos" type="file" accept=".png,.jpg,.jpeg" multiple aria-label="실험 사진" />
+              <span class="dropzone-icon" aria-hidden="true">🖼️</span>
+              <span class="dropzone-title">사진을 끌어다 놓거나 클릭</span>
+              <span class="dropzone-sub">.png · .jpg</span>
+              <span class="dropzone-file" data-dz-file></span>
+            </div>
+          </div>
+        </div>
+        <div class="field">
+          <span class="field-label">실험 매뉴얼 PDF (선택)</span>
+          <div class="dropzone">
+            <input id="crManual" name="manual" type="file" accept="application/pdf" aria-label="실험 매뉴얼 PDF" />
+            <span class="dropzone-icon" aria-hidden="true">📄</span>
+            <span class="dropzone-title">매뉴얼 PDF를 끌어다 놓거나 클릭</span>
+            <span class="dropzone-sub">application/pdf</span>
+            <span class="dropzone-file" data-dz-file></span>
+          </div>
+        </div>
+        <div class="field user-notes-field">
+          <label>
+            <span class="field-label">AI 참고 메모 / 내 의견 (선택)</span>
+            <textarea id="crUserNotes" name="userNotes" rows="4" maxlength="12000" placeholder="예: 색 변화가 예상보다 늦게 나타났고, 마지막 적정값은 종말점 판단이 애매해서 오차 분석에 반영하고 싶음"></textarea>
+          </label>
+          <small>.md/.txt 파일로 길게 작성한 메모도 함께 첨부할 수 있습니다.</small>
+          <input id="crUserNotesFile" name="userNotesFile" type="file" accept=".md,.txt,text/markdown,text/plain" aria-label="참고 메모 파일" />
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-head">
+          <span class="form-section-title">보고서 정보</span>
+        </div>
+        <div class="field-grid cols-3">
+          <div class="field">
+            <label><span class="field-label">날짜 <span class="req">*</span></span>
+              <input id="crDate" name="date" type="date" required />
+            </label>
+          </div>
+          <div class="field">
+            <label><span class="field-label">실험 온도 (°C)</span>
+              <input id="crTemp" name="temperature" type="number" step="0.1" placeholder="예: 22.5" />
+            </label>
+          </div>
+          <div class="field">
+            <label><span class="field-label">기압 (hPa)</span>
+              <input id="crPressure" name="pressure" type="number" step="0.1" placeholder="예: 1013.2" />
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-head">
+          <span class="form-section-title">출력 설정</span>
+        </div>
+        <input type="hidden" name="crModel" value="claude-opus-4-7" />
+        <div class="field-grid cols-3">
+          <div class="seg-group">
+            <span class="field-label">출력 형식</span>
+            <div class="segmented">
+              <label><input type="radio" name="crFormat" value="docx" checked /> .docx</label>
+              <label><input type="radio" name="crFormat" value="hwpx" /> .hwpx</label>
+            </div>
+          </div>
+          <div class="seg-group">
+            <span class="field-label">보고서 스타일</span>
+            <div class="segmented">
+              <label><input type="radio" name="crStyle" value="default" checked /> 기본 양식</label>
+              <label><input type="radio" name="crStyle" value="minimal" /> 간단 양식</label>
+            </div>
+          </div>
+          <div class="field">
+            <label><span class="field-label">글꼴</span>
+              <select id="crFontFace" name="fontFace">
+                <option value="malgun-gothic" selected>맑은 고딕</option>
+                <option value="nanum-myeongjo">나눔명조</option>
+                <option value="hamchorom-batang" data-hwpx-only="true" hidden disabled>함초롬바탕</option>
+              </select>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="policy-check">
         <label>
           <input type="checkbox" required />
           본인이 이용 권한을 가진 파일만 업로드하며, 학교·교사·평가기준의 AI 사용 규정을 확인했고,
           생성물은 학습 보조 초안으로만 사용합니다. 그대로 제출하지 않습니다.
         </label>
-      </p>
-      <p>
-        <label>날짜:
-          <input id="crDate" name="date" type="date" required />
-        </label>
-      </p>
-      <p>
-        <label>실험 온도 (°C):
-          <input id="crTemp" name="temperature" type="number" step="0.1" placeholder="예: 22.5" style="width: 100px" />
-        </label>
-        &nbsp;
-        <label>기압 (hPa):
-          <input id="crPressure" name="pressure" type="number" step="0.1" placeholder="예: 1013.2" style="width: 110px" />
-        </label>
-      </p>
-      <!-- Sonnet 비활성화 — Opus 고정. 복구 시 주석 해제.
-      <p>
-        <strong>모델 선택:</strong><br />
-        <label>
-          <input type="radio" name="crModel" value="claude-sonnet-4-6" checked />
-          Sonnet 4.6
-        </label><br />
-        <label>
-          <input type="radio" name="crModel" value="claude-opus-4-7" />
-          Opus 4.7
-        </label>
-      </p>
-      -->
-      <input type="hidden" name="crModel" value="claude-opus-4-7" />
-      <p>
-        <strong>출력 형식:</strong>
-        <label style="margin-left: 8px;">
-          <input type="radio" name="crFormat" value="docx" checked />
-          .docx (MS Word)
-        </label>
-        <label style="margin-left: 8px;">
-          <input type="radio" name="crFormat" value="hwpx" />
-          .hwpx (한글)
-        </label>
-      </p>
-      <p>
-        <strong>보고서 스타일:</strong><br />
-        <label>
-          <input type="radio" name="crStyle" value="default" checked />
-          기본 양식
-        </label><br />
-        <label>
-          <input type="radio" name="crStyle" value="minimal" />
-          간단 양식
-        </label>
-      </p>
-      <p>
-        <label>글꼴:
-          <select id="crFontFace" name="fontFace">
-            <option value="malgun-gothic" selected>맑은 고딕</option>
-            <option value="nanum-myeongjo">나눔명조</option>
-            <option value="hamchorom-batang" data-hwpx-only="true" hidden disabled>함초롬바탕</option>
-          </select>
-        </label>
-      </p>
-      <p>
+      </div>
+
+      <div class="form-actions">
+        <span class="hint">생성에는 보통 2~4분 정도 걸립니다.</span>
         <button type="submit" id="crBtn">결과보고서 생성</button>
-      </p>
-      <p class="hint">생성에는 보통 2~4분 정도 걸립니다.</p>
+      </div>
     </form>
 
     <!-- ── 물리 결과보고서 폼 (Phase 3) ─────────────────────────── -->
     <form id="physResultForm" class="report-form" data-report-form="phys-result" hidden>
-      <p class="notice">
-        <strong>.cap, 엑셀/CSV/텍스트, 데이터표·그래프 스크린샷 중 하나는 필수</strong>. 여러 자료가 있으면 모두 사용합니다.<br>
-        엑셀로 측정한 실험은 매뉴얼 PDF도 같이 첨부 권장.
-      </p>
-      <p>
-        <label>PASCO Capstone 파일 (.cap):
-          <input id="prCap" name="cap" type="file" accept=".cap" />
-        </label>
-      </p>
-      <p>
-        <label>엑셀/CSV/텍스트 데이터 (여러 개 가능):
-          <input id="prData" name="data" type="file" accept=".xlsx,.xls,.csv,.txt,.md,text/plain,text/markdown" multiple />
-        </label>
-      </p>
-      <p>
-        <label>실험 매뉴얼 PDF (엑셀 사용 시 권장):
-          <input id="prManual" name="manual" type="file" accept="application/pdf" />
-        </label>
-      </p>
-      <p>
-        <label>실험 사진 / 데이터표·그래프 스크린샷 (여러 장 가능, 선택):
-          <input id="prPhotos" name="photos" type="file" accept=".png,.jpg,.jpeg" multiple />
-        </label>
-      </p>
-      <p class="user-notes-field">
-        <label>AI 참고 메모 / 내 의견 (선택):
-          <textarea id="prUserNotes" name="userNotes" rows="4" maxlength="12000" placeholder="예: 예비 시행 1회는 포토게이트가 흔들려 제외했고, 재측정에서는 트랙 이음새를 지나며 카트가 살짝 튀는 현상이 있었음"></textarea>
-          <br>
-          <small>.md/.txt 파일로 길게 작성한 메모도 함께 첨부할 수 있습니다.</small><br>
-          <input id="prUserNotesFile" name="userNotesFile" type="file" accept=".md,.txt,text/markdown,text/plain" />
-        </label>
-      </p>
-      <p class="policy-check">
+      <div class="notice">
+        <strong>.cap, 엑셀/CSV/텍스트, 데이터표·그래프 스크린샷 중 하나는 필수.</strong>
+        여러 자료가 있으면 모두 사용합니다. 엑셀로 측정한 실험은 매뉴얼 PDF도 함께 첨부 권장.
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-head">
+          <span class="form-section-title">자료 업로드</span>
+        </div>
+        <div class="field-grid">
+          <div class="field">
+            <span class="field-label">PASCO Capstone (.cap)</span>
+            <div class="dropzone">
+              <input id="prCap" name="cap" type="file" accept=".cap" aria-label="PASCO Capstone 파일" />
+              <span class="dropzone-icon" aria-hidden="true">🧪</span>
+              <span class="dropzone-title">.cap 파일을 끌어다 놓거나 클릭</span>
+              <span class="dropzone-sub">PASCO Capstone</span>
+              <span class="dropzone-file" data-dz-file></span>
+            </div>
+          </div>
+          <div class="field">
+            <span class="field-label">엑셀/CSV/텍스트 (여러 개)</span>
+            <div class="dropzone">
+              <input id="prData" name="data" type="file" accept=".xlsx,.xls,.csv,.txt,.md,text/plain,text/markdown" multiple aria-label="데이터 파일" />
+              <span class="dropzone-icon" aria-hidden="true">📊</span>
+              <span class="dropzone-title">데이터를 끌어다 놓거나 클릭</span>
+              <span class="dropzone-sub">.xlsx · .csv · .txt · .md</span>
+              <span class="dropzone-file" data-dz-file></span>
+            </div>
+          </div>
+        </div>
+        <div class="field-grid">
+          <div class="field">
+            <span class="field-label">실험 매뉴얼 PDF (권장)</span>
+            <div class="dropzone">
+              <input id="prManual" name="manual" type="file" accept="application/pdf" aria-label="실험 매뉴얼 PDF" />
+              <span class="dropzone-icon" aria-hidden="true">📄</span>
+              <span class="dropzone-title">매뉴얼 PDF를 끌어다 놓거나 클릭</span>
+              <span class="dropzone-sub">application/pdf</span>
+              <span class="dropzone-file" data-dz-file></span>
+            </div>
+          </div>
+          <div class="field">
+            <span class="field-label">사진 / 데이터·그래프 스크린샷 (여러 장)</span>
+            <div class="dropzone">
+              <input id="prPhotos" name="photos" type="file" accept=".png,.jpg,.jpeg" multiple aria-label="사진/스크린샷" />
+              <span class="dropzone-icon" aria-hidden="true">🖼️</span>
+              <span class="dropzone-title">이미지를 끌어다 놓거나 클릭</span>
+              <span class="dropzone-sub">.png · .jpg</span>
+              <span class="dropzone-file" data-dz-file></span>
+            </div>
+          </div>
+        </div>
+        <div class="field user-notes-field">
+          <label>
+            <span class="field-label">AI 참고 메모 / 내 의견 (선택)</span>
+            <textarea id="prUserNotes" name="userNotes" rows="4" maxlength="12000" placeholder="예: 예비 시행 1회는 포토게이트가 흔들려 제외했고, 재측정에서는 트랙 이음새를 지나며 카트가 살짝 튀는 현상이 있었음"></textarea>
+          </label>
+          <small>.md/.txt 파일로 길게 작성한 메모도 함께 첨부할 수 있습니다.</small>
+          <input id="prUserNotesFile" name="userNotesFile" type="file" accept=".md,.txt,text/markdown,text/plain" aria-label="참고 메모 파일" />
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-head">
+          <span class="form-section-title">보고서 정보</span>
+        </div>
+        <div class="field-grid">
+          <div class="field">
+            <label><span class="field-label">날짜 <span class="req">*</span></span>
+              <input id="prDate" name="date" type="date" required />
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-head">
+          <span class="form-section-title">출력 설정</span>
+        </div>
+        <input type="hidden" name="prModel" value="claude-opus-4-7" />
+        <div class="field-grid">
+          <div class="seg-group">
+            <span class="field-label">출력 형식</span>
+            <div class="segmented">
+              <label><input type="radio" name="prFormat" value="docx" checked /> .docx</label>
+              <label><input type="radio" name="prFormat" value="hwpx" /> .hwpx</label>
+            </div>
+          </div>
+          <div class="field">
+            <label><span class="field-label">글꼴</span>
+              <select id="prFontFace" name="fontFace">
+                <option value="malgun-gothic" selected>맑은 고딕</option>
+                <option value="nanum-gothic">나눔고딕</option>
+                <option value="nanum-myeongjo">나눔명조</option>
+                <option value="hamchorom-batang">함초롬바탕</option>
+              </select>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="policy-check">
         <label>
           <input type="checkbox" required />
           본인이 이용 권한을 가진 파일만 업로드하며, 학교·교사·평가기준의 AI 사용 규정을 확인했고,
           생성물은 학습 보조 초안으로만 사용합니다. 그대로 제출하지 않습니다.
         </label>
-      </p>
-      <p>
-        <label>날짜:
-          <input id="prDate" name="date" type="date" required />
-        </label>
-      </p>
-      <!-- Sonnet 비활성화 — Opus 고정. 복구 시 주석 해제.
-      <p>
-        <strong>모델 선택:</strong><br />
-        <label>
-          <input type="radio" name="prModel" value="claude-sonnet-4-6" checked />
-          Sonnet 4.6
-        </label><br />
-        <label>
-          <input type="radio" name="prModel" value="claude-opus-4-7" />
-          Opus 4.7
-        </label>
-      </p>
-      -->
-      <input type="hidden" name="prModel" value="claude-opus-4-7" />
-      <p>
-        <strong>출력 형식:</strong>
-        <label style="margin-left: 8px;">
-          <input type="radio" name="prFormat" value="docx" checked />
-          .docx (MS Word)
-        </label>
-        <label style="margin-left: 8px;">
-          <input type="radio" name="prFormat" value="hwpx" />
-          .hwpx (한글)
-        </label>
-      </p>
-      <p>
-        <label>글꼴:
-          <select id="prFontFace" name="fontFace">
-            <option value="malgun-gothic" selected>맑은 고딕</option>
-            <option value="nanum-gothic">나눔고딕</option>
-            <option value="nanum-myeongjo">나눔명조</option>
-            <option value="hamchorom-batang">함초롬바탕</option>
-          </select>
-        </label>
-      </p>
-      <p>
+      </div>
+
+      <div class="form-actions">
+        <span class="hint">생성에는 보통 2~3분 정도 걸립니다. 첨부가 많으면 조금 더 걸릴 수 있습니다.</span>
         <button type="submit" id="prBtn">물리 결과보고서 생성</button>
-      </p>
-      <p class="hint">생성에는 보통 2~3분 정도 걸립니다. 첨부가 많으면 조금 더 걸릴 수 있습니다.</p>
+      </div>
     </form>
 
     <form id="form" class="report-form" data-report-form="chem-pre">
-      <p>
-        <label>실험 매뉴얼 PDF:
-          <input id="manual" name="manual" type="file" accept="application/pdf" required />
-        </label>
-      </p>
-      <p class="user-notes-field">
-        <label>AI 참고 메모 / 내 의견 (선택):
-          <textarea id="preUserNotes" name="userNotes" rows="4" maxlength="12000" placeholder="예: 선생님이 안전 주의와 수율 계산을 특히 강조했고, 실험 과정에서 왜 ice bath를 쓰는지 자세히 설명하고 싶음"></textarea>
-          <br>
-          <small>.md/.txt 파일로 길게 작성한 메모도 함께 첨부할 수 있습니다.</small><br>
-          <input id="preUserNotesFile" name="userNotesFile" type="file" accept=".md,.txt,text/markdown,text/plain" />
-        </label>
-      </p>
-      <p class="policy-check">
+      <div class="form-section">
+        <div class="form-section-head">
+          <span class="form-section-title">자료 업로드</span>
+        </div>
+        <div class="field">
+          <span class="field-label">실험 매뉴얼 PDF <span class="req">*</span></span>
+          <div class="dropzone">
+            <input id="manual" name="manual" type="file" accept="application/pdf" required aria-label="실험 매뉴얼 PDF" />
+            <span class="dropzone-icon" aria-hidden="true">📄</span>
+            <span class="dropzone-title">PDF를 끌어다 놓거나 클릭해서 선택</span>
+            <span class="dropzone-sub">application/pdf</span>
+            <span class="dropzone-file" data-dz-file></span>
+          </div>
+        </div>
+        <div class="field user-notes-field">
+          <label>
+            <span class="field-label">AI 참고 메모 / 내 의견 (선택)</span>
+            <textarea id="preUserNotes" name="userNotes" rows="4" maxlength="12000" placeholder="예: 선생님이 안전 주의와 수율 계산을 특히 강조했고, 실험 과정에서 왜 ice bath를 쓰는지 자세히 설명하고 싶음"></textarea>
+          </label>
+          <small>.md/.txt 파일로 길게 작성한 메모도 함께 첨부할 수 있습니다.</small>
+          <input id="preUserNotesFile" name="userNotesFile" type="file" accept=".md,.txt,text/markdown,text/plain" aria-label="참고 메모 파일" />
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-head">
+          <span class="form-section-title">보고서 정보</span>
+        </div>
+        <div class="field-grid cols-3">
+          <div class="field">
+            <label><span class="field-label">날짜 <span class="req">*</span></span>
+              <input id="date" name="date" type="date" required />
+            </label>
+          </div>
+          <div class="field">
+            <label><span class="field-label">이름 (선택)</span>
+              <input id="studentName" name="studentName" type="text" maxlength="20" placeholder="예: 홍길동" />
+            </label>
+          </div>
+          <div class="field">
+            <label><span class="field-label">실험 온도 (°C, 선택)</span>
+              <input id="temperature" name="temperature" type="text" placeholder="22.5" />
+            </label>
+          </div>
+          <div class="field">
+            <label><span class="field-label">기압 (hPa, 선택)</span>
+              <input id="pressure" name="pressure" type="text" placeholder="1013.2" />
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-head">
+          <span class="form-section-title">출력 설정</span>
+        </div>
+        <input type="hidden" name="model" value="claude-opus-4-7" />
+        <div class="field-grid cols-3">
+          <div class="seg-group">
+            <span class="field-label">출력 형식</span>
+            <div class="segmented">
+              <label><input type="radio" name="format" value="docx" checked /> .docx</label>
+              <label><input type="radio" name="format" value="hwpx" /> .hwpx</label>
+            </div>
+          </div>
+          <div class="seg-group">
+            <span class="field-label">보고서 스타일</span>
+            <div class="segmented">
+              <label><input type="radio" name="style" value="default" checked /> 기본 양식</label>
+              <label><input type="radio" name="style" value="minimal" /> 간단 양식</label>
+            </div>
+          </div>
+          <div class="field">
+            <label><span class="field-label">글꼴</span>
+              <select id="fontFace" name="fontFace">
+                <option value="malgun-gothic" selected>맑은 고딕</option>
+                <option value="nanum-myeongjo">나눔명조</option>
+                <option value="hamchorom-batang" data-hwpx-only="true" hidden disabled>함초롬바탕</option>
+              </select>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="policy-check">
         <label>
           <input type="checkbox" required />
           본인이 이용 권한을 가진 파일만 업로드하며, 학교·교사·평가기준의 AI 사용 규정을 확인했고,
           생성물은 학습 보조 초안으로만 사용합니다. 그대로 제출하지 않습니다.
         </label>
-      </p>
-      <p>
-        <label>날짜:
-          <input id="date" name="date" type="date" required />
-        </label>
-      </p>
-      <p>
-        <label>이름 (선택):
-          <input id="studentName" name="studentName" type="text" maxlength="20" placeholder="예: 홍길동" style="width: 130px" />
-        </label>
-      </p>
-      <p>
-        <label>실험 온도 (°C, 선택):
-          <input id="temperature" name="temperature" type="text" placeholder="22.5" style="width: 90px" />
-        </label>
-        &nbsp;
-        <label>기압 (hPa, 선택):
-          <input id="pressure" name="pressure" type="text" placeholder="1013.2" style="width: 110px" />
-        </label>
-      </p>
-      <!-- Sonnet 모델 비활성화 — Opus 4.7 고정 사용. 복구하려면 아래 주석 해제하고 hidden input 제거.
-      <p>
-        <strong>모델 선택:</strong><br />
-        <label>
-          <input type="radio" name="model" value="claude-sonnet-4-6" checked />
-          Sonnet 4.6
-        </label><br />
-        <label>
-          <input type="radio" name="model" value="claude-opus-4-7" />
-          Opus 4.7
-        </label>
-      </p>
-      -->
-      <input type="hidden" name="model" value="claude-opus-4-7" />
-      <p>
-        <strong>출력 형식:</strong>
-        <label style="margin-left: 8px;">
-          <input type="radio" name="format" value="docx" checked />
-          .docx (MS Word)
-        </label>
-        <label style="margin-left: 8px;">
-          <input type="radio" name="format" value="hwpx" />
-          .hwpx (한글)
-        </label>
-      </p>
-      <p>
-        <strong>보고서 스타일:</strong><br />
-        <label>
-          <input type="radio" name="style" value="default" checked />
-          기본 양식
-        </label><br />
-        <label>
-          <input type="radio" name="style" value="minimal" />
-          간단 양식
-        </label>
-      </p>
-      <p>
-        <label>글꼴:
-          <select id="fontFace" name="fontFace">
-            <option value="malgun-gothic" selected>맑은 고딕</option>
-            <option value="nanum-myeongjo">나눔명조</option>
-            <option value="hamchorom-batang" data-hwpx-only="true" hidden disabled>함초롬바탕</option>
-          </select>
-        </label>
-      </p>
-      <p>
+      </div>
+
+      <div class="form-actions">
+        <span class="hint">생성에는 보통 2~3분 정도 걸립니다. 그림 자리는 문서 안의 링크로 직접 채울 수 있습니다(기본 양식).</span>
         <button type="submit" id="btn">사전보고서 생성</button>
-      </p>
-      <p class="hint">생성에는 보통 2~3분 정도 걸립니다.</p>
-      <p class="hint">그림 자리는 문서 안의 링크를 열어 직접 채울 수 있습니다 (기본 양식).</p>
+      </div>
     </form>
 
     <p class="disclaimer">
@@ -351,10 +457,11 @@
     </p>
 
     <div id="progressArea" style="display: none">
-      <h2 id="statusTitle">생성 중...</h2>
-      <p>
+      <div class="status-head">
+        <span class="spinner" id="genSpinner" aria-hidden="true"></span>
+        <h2 id="statusTitle">생성 중...</h2>
         <button type="button" id="stopBtn" class="stop-btn" style="display: none">중지</button>
-      </p>
+      </div>
       <pre id="progress"></pre>
       <div id="resultArea"></div>
     </div>
@@ -475,14 +582,21 @@
     </section>
 
     <footer class="site-footer">
-      <a href="/terms.html">이용약관</a>
-      <a href="/privacy.html">개인정보처리방침</a>
-      <a href="/refund.html">환불정책</a>
-      <a href="/changelog.html">패치노트</a>
-      <span class="site-version" data-site-version>버전 확인 중...</span>
+      <div class="footer-links">
+        <a href="/terms.html">이용약관</a>
+        <a href="/privacy.html">개인정보처리방침</a>
+        <a href="/refund.html">환불정책</a>
+        <a href="/changelog.html">패치노트</a>
+        <a href="https://github.com/fakeminjun7321/lab-report-generator-web" target="_blank" rel="noopener">GitHub</a>
+      </div>
+      <div class="footer-copy">
+        © 2026 Lab Report Generator Web · MIT License ·
+        <span class="site-version" data-site-version>버전 확인 중...</span>
+      </div>
     </footer>
 
     <script src="/version-footer.js"></script>
+    <script src="/theme.js"></script>
     <script>
       let currentStudentId = "";
       const USE_POLICY_NOTE =
@@ -750,6 +864,40 @@
         .querySelectorAll('#physResultForm input[name="prFormat"]')
         .forEach((el) => el.addEventListener("change", updatePhysResultFontOptions));
       updatePhysResultFontOptions();
+
+      // 파일 입력 → 드롭존: 파일명 표시 + 드래그 상태.
+      // 네이티브 <input type=file>가 영역을 덮고 있어 클릭/드롭을 그대로 처리한다.
+      function initDropzones() {
+        document.querySelectorAll(".dropzone").forEach((dz) => {
+          const input = dz.querySelector('input[type="file"]');
+          if (!input || dz.dataset.dzInit) return;
+          dz.dataset.dzInit = "1";
+          const fileEl = dz.querySelector("[data-dz-file]");
+          const render = () => {
+            const files = input.files;
+            if (files && files.length) {
+              dz.classList.add("is-filled");
+              if (fileEl)
+                fileEl.textContent =
+                  files.length === 1
+                    ? files[0].name
+                    : `${files.length}개 파일 선택됨`;
+            } else {
+              dz.classList.remove("is-filled");
+              if (fileEl) fileEl.textContent = "";
+            }
+          };
+          input.addEventListener("change", render);
+          ["dragenter", "dragover"].forEach((ev) =>
+            dz.addEventListener(ev, () => dz.classList.add("is-dragover")),
+          );
+          ["dragleave", "dragend", "drop"].forEach((ev) =>
+            dz.addEventListener(ev, () => dz.classList.remove("is-dragover")),
+          );
+          render();
+        });
+      }
+      initDropzones();
 
       // 진행 중인 작업 추적용 (중지·재시도 방지)
       let currentJobId = null;
@@ -1030,10 +1178,11 @@
       }
 
       function getSelectedModel() {
-        // Sonnet 비활성화 — 항상 Opus 4.7 사용.
-        // 복구 시: 아래 hidden input 대응 로직과 함께 라디오 버튼 형태로 변경.
-        const el = document.querySelector('input[name="model"]');
-        return el ? el.value : "claude-opus-4-7";
+        // 현재 Sonnet 4.6 고정(hidden input). 라디오 노출 시 :checked 우선으로 동작.
+        const el =
+          document.querySelector('input[name="model"]:checked') ||
+          document.querySelector('input[name="model"]');
+        return el ? el.value : "claude-sonnet-4-6";
       }
 
       function getModelLabel(modelId) {
@@ -1304,7 +1453,7 @@
         const crModel =
           document.querySelector('input[name="crModel"]:checked')?.value ||
           document.querySelector('input[name="crModel"]')?.value ||
-          "claude-opus-4-7";
+          "claude-sonnet-4-6";
         const modelLabel = getModelLabel(crModel);
         const crStyle =
           document.querySelector('input[name="crStyle"]:checked')?.value ||
@@ -1412,7 +1561,7 @@
         const prModel =
           document.querySelector('input[name="prModel"]:checked')?.value ||
           document.querySelector('input[name="prModel"]')?.value ||
-          "claude-opus-4-7";
+          "claude-sonnet-4-6";
         const modelLabel = getModelLabel(prModel);
         const prFormat = getPhysResultFormat();
         updatePhysResultFontOptions();
@@ -1505,11 +1654,15 @@
         if (crBtn) crBtn.textContent = "결과보고서 생성";
         if (prBtn) prBtn.textContent = "물리 결과보고서 생성";
         stopBtn.textContent = "중지";
+        const genSpinner = document.getElementById("genSpinner");
+        if (genSpinner) genSpinner.style.display = "none";
       }
 
       function streamJob(jobId) {
         const es = new EventSource(`/api/jobs/${jobId}/stream`);
         currentEs = es;
+        const genSpinner = document.getElementById("genSpinner");
+        if (genSpinner) genSpinner.style.display = "inline-block";
 
         es.addEventListener("progress", (e) => {
           appendLine(JSON.parse(e.data));
@@ -1519,6 +1672,7 @@
           const data = JSON.parse(e.data);
           appendLine("완료");
           statusTitle.textContent = "완료";
+          if (genSpinner) genSpinner.style.display = "none";
 
           const link = document.createElement("a");
           link.href = `/api/jobs/${jobId}/download`;
@@ -1539,6 +1693,7 @@
             : "서버 연결이 끊겼습니다. 보통 (1) 서버 재배포로 컨테이너가 재시작되었거나 (2) 무료 플랜 일시 sleep 진입 시 발생합니다. 이 경우 크레딧(쿠폰)은 차감되지 않습니다. 1~2분 기다린 뒤 보고서 생성을 다시 시도하세요. (이전 작업은 복구 불가 — 새로 만들어집니다)";
           appendLine("오류: " + msg);
           statusTitle.textContent = "오류";
+          if (genSpinner) genSpinner.style.display = "none";
           es.close();
           resetForm();
         });
