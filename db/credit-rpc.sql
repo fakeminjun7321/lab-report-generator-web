@@ -1,0 +1,51 @@
+-- 원자적 크레딧 차감 RPC
+-- ---------------------------------------------------------------------------
+-- 목적: 동시 요청에서도 잃어버린 갱신(lost update)·이중 차감 없이 잔액을 깎는다.
+-- 단일 `UPDATE ... RETURNING`이라 행 수준 잠금으로 직렬화된다.
+--
+-- 적용: Supabase 대시보드 → SQL Editor에 아래 전체를 붙여넣고 한 번 실행.
+-- 적용 후 lib/supabase.js의 deductCredit()이 이 함수를 우선 사용한다.
+-- (함수가 없으면 코드가 기존 비원자 read-modify-write로 자동 폴백하므로,
+--  실행 전에도 서비스는 동작한다 — 다만 동시성 보호는 없음.)
+--
+-- p_user_id 는 users.id 타입(uuid/text)에 상관없이 동작하도록 text로 받는다.
+-- ---------------------------------------------------------------------------
+
+create or replace function deduct_credit(
+  p_user_id text,
+  p_col text,
+  p_amount numeric
+)
+returns numeric
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  new_balance numeric;
+begin
+  if p_amount is null or p_amount < 0 then
+    raise exception 'invalid amount: %', p_amount;
+  end if;
+
+  if p_col = 'pre_credits_usd' then
+    update users
+      set pre_credits_usd = greatest(coalesce(pre_credits_usd, 0) - p_amount, 0)
+      where id::text = p_user_id
+      returning pre_credits_usd into new_balance;
+  elsif p_col = 'result_credits_usd' then
+    update users
+      set result_credits_usd = greatest(coalesce(result_credits_usd, 0) - p_amount, 0)
+      where id::text = p_user_id
+      returning result_credits_usd into new_balance;
+  else
+    raise exception 'invalid credit column: %', p_col;
+  end if;
+
+  if new_balance is null then
+    raise exception 'user not found: %', p_user_id;
+  end if;
+
+  return new_balance;
+end;
+$$;
