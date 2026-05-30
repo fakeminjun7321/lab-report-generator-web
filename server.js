@@ -8,6 +8,20 @@ const {
   normalizeFontFace,
   normalizeFontFaceForFormat,
 } = require("./lib/document-fonts");
+
+// 프로세스 전역 안전망: 처리되지 않은 예외/거부가 서버 프로세스 전체를 죽여
+// 진행 중인 다른 사용자 작업까지 같이 날리지 않도록, 최후 백스톱으로 로깅만 한다.
+// (개별 요청 오류는 각 라우트/Promise에서 이미 잡아 처리한다.)
+process.on("uncaughtException", (err) => {
+  console.error("[uncaughtException]", err && err.stack ? err.stack : err);
+});
+process.on("unhandledRejection", (reason) => {
+  console.error(
+    "[unhandledRejection]",
+    reason && reason.stack ? reason.stack : reason,
+  );
+});
+
 // Pipeline registry — 보고서 종류별로 입력 처리 + 생성 함수 묶음.
 // 각 파이프라인은 prepareInput(filesByField, body) → generateContent에 전달할 인자 객체 반환.
 const PIPELINES = {
@@ -805,7 +819,7 @@ app.post(
         : filesByField[pipeline.filenameSourceField]?.[0];
     const sourceFilename = sourceFile?.originalname || "";
     // 사용자가 폼에서 선택한 모델. 화이트리스트 검증으로 임의 모델 주입 차단.
-    // Sonnet 비활성화 — Opus 4.7만 허용. 복구 시 "claude-sonnet-4-6" 추가.
+    // Opus 4.7 기본(품질 우선). Sonnet도 쓰려면 화이트리스트에 "claude-sonnet-4-6" 추가.
     const ALLOWED_MODELS = ["claude-opus-4-7"];
     const requestedModel = String(req.body.model || "").trim();
     const model = ALLOWED_MODELS.includes(requestedModel) ? requestedModel : null;
@@ -1128,8 +1142,9 @@ async function runGeneration(job, pipeline, pipelineInput, meta) {
 
     // DB 누적 (Supabase enabled + 일반 user)
     if (supa.isEnabled() && job.userInfo?.id) {
+      // 1) 실제 Anthropic 비용 누적 (admin 통계용). 실패해도 보고서엔 영향 없는
+      //    소프트 경고로만 처리한다.
       try {
-        // 1) 실제 Anthropic 비용 누적 (admin 통계용)
         await supa.recordUsage({
           userId: job.userInfo.id,
           jobId: job.id,
@@ -1149,11 +1164,17 @@ async function runGeneration(job, pipeline, pipelineInput, meta) {
             policyAcknowledgement,
           },
         });
+      } catch (e) {
+        pushProgress(job, `⚠ 사용량 통계 기록 실패: ${e.message}`);
+      }
 
-        // 2) 종류별 잔액 차감 (admin이 아닌 일반 사용자만)
-        const userIsAdmin = !!job.userInfo.isAdmin;
-        if (!userIsAdmin && pipeline.creditField) {
-          const price = pricing.getReportPrice(job.reportType);
+      // 2) 종류별 잔액 차감 (admin이 아닌 일반 사용자만).
+      //    차감 실패는 '미청구 보고서'(돈 손실)이므로 절대 조용히 넘기지 않고
+      //    감사 가능한 error 로그 + 사용자 표시로 남긴다.
+      const userIsAdmin = !!job.userInfo.isAdmin;
+      if (!userIsAdmin && pipeline.creditField) {
+        const price = pricing.getReportPrice(job.reportType);
+        try {
           const { newBalance } = await supa.deductCredit(
             job.userInfo.id,
             pipeline.creditField,
@@ -1162,15 +1183,20 @@ async function runGeneration(job, pipeline, pipelineInput, meta) {
           const krwRate = await getKrwPerUsd();
           const krw = Math.round(newBalance * krwRate);
           const remainingCount = Math.floor(newBalance / price);
-          const label =
-            pipeline.creditField === "pre" ? "사전" : "결과";
+          const label = pipeline.creditField === "pre" ? "사전" : "결과";
           pushProgress(
             job,
             `💳 ${label} 잔액: $${newBalance.toFixed(3)} ≈ ₩${krw.toLocaleString()} (약 ${remainingCount}건 남음)`,
           );
+        } catch (e) {
+          console.error(
+            `[BILLING] credit deduction FAILED (uncharged report) userId=${job.userInfo.id} jobId=${job.id} field=${pipeline.creditField} priceUsd=${price} :: ${e.message}`,
+          );
+          pushProgress(
+            job,
+            `⚠ 크레딧 차감 실패로 이번 건이 미청구로 기록되었습니다(운영자 확인 필요): ${e.message}`,
+          );
         }
-      } catch (e) {
-        pushProgress(job, `⚠ 사용량 DB 기록 실패: ${e.message}`);
       }
     } else {
       pushProgress(
