@@ -2297,3 +2297,29 @@ textarea.tool-input {
     margin-left: 0;
   }
 }
+
+/* 엑셀 미리보기 표 (data-input.js) */
+.prev-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12.5px;
+}
+.prev-table th,
+.prev-table td {
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+  text-align: left;
+  white-space: nowrap;
+}
+.prev-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-weight: 700;
+}
+.prev-table .prev-rn {
+  background: var(--surface-2);
+  color: var(--text-faint);
+  text-align: right;
+}
