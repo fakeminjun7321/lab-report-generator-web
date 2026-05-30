@@ -28,6 +28,46 @@ from lxml import etree
 
 from hwpx import HwpxDocument
 
+# ── XML 비허용 제어문자 방어 (코드 리뷰 ⑧) ────────────────────────────────
+# Claude 출력이나 사용자 업로드(엑셀/CSV/텍스트)에 섞인 XML 1.0 비허용 제어문자
+# (NULL·\x01~\x08·\x0b·\x0c·\x0e~\x1f)가 lxml element text로 들어가면
+# "ValueError: All strings must be XML compatible"로 HWPX 생성 전체가 죽는다.
+# python-hwpx의 텍스트 입력 choke point인 add_run을 감싸 제거한다.
+# (\t \n \r 은 유효하므로 보존. 의도된 sentinel 제어문자는 코드에 없음.)
+# 이 모듈은 chem-result/phys-result 생성기도 import 하므로 한 번 패치로 모두 커버된다.
+from hwpx.oxml.document import HwpxOxmlParagraph as _HwpxParagraph
+
+_XML_ILLEGAL_RE = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f]")
+
+
+def _strip_illegal_xml(text):
+    if isinstance(text, str) and _XML_ILLEGAL_RE.search(text):
+        return _XML_ILLEGAL_RE.sub("", text)
+    return text
+
+
+def _deep_clean_xml(obj):
+    """JSON 컨텐츠의 모든 문자열에서 XML 비허용 제어문자를 재귀 제거한다.
+    각 생성기 main()에서 json 파싱 직후 호출하면, add_run 외의 직접 .text=
+    경로(제목 치환 등)까지 전부 보호된다."""
+    if isinstance(obj, str):
+        return _strip_illegal_xml(obj)
+    if isinstance(obj, list):
+        return [_deep_clean_xml(x) for x in obj]
+    if isinstance(obj, dict):
+        return {k: _deep_clean_xml(v) for k, v in obj.items()}
+    return obj
+
+
+if not getattr(_HwpxParagraph.add_run, "_xmlclean_wrapped", False):
+    _orig_add_run = _HwpxParagraph.add_run
+
+    def _safe_add_run(self, text="", **kwargs):
+        return _orig_add_run(self, _strip_illegal_xml(text), **kwargs)
+
+    _safe_add_run._xmlclean_wrapped = True
+    _HwpxParagraph.add_run = _safe_add_run
+
 
 KR_NUM = ["가", "나", "다", "라", "마", "바", "사", "아",
           "자", "차", "카", "타", "파", "하"]
@@ -1711,6 +1751,7 @@ def main():
     else:
         content = json.load(sys.stdin)
 
+    content = _deep_clean_xml(content)  # XML 비허용 제어문자 제거 (코드 리뷰 ⑧)
     doc = generate_hwpx(content)
 
     if len(sys.argv) >= 3:
