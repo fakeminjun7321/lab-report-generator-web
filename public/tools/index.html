@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>보고서 도구 모음</title>
+    <meta name="description" content="실험 보고서에 쓰기 좋은 브라우저 전용 도구 모음 — 글자수 세기, 평균·표준편차, 유효숫자·오차, LaTeX→한글 수식 변환." />
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("theme");
+          if (!t) t = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+          document.documentElement.setAttribute("data-theme", t);
+        } catch (e) {}
+      })();
+    </script>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body class="landing">
+    <div class="landing-bg" aria-hidden="true"></div>
+
+    <nav class="landing-nav">
+      <div class="landing-nav-inner">
+        <a href="/" class="brand">
+          <span class="brand-mark" aria-hidden="true">R</span>
+          보고서 작성 툴
+        </a>
+        <div class="landing-nav-actions">
+          <a href="/" class="nav-link">메인</a>
+          <a href="/guide.html" class="nav-link">이용 가이드</a>
+          <button type="button" id="themeToggle" class="theme-toggle" aria-label="다크 모드로 전환" title="다크 모드로 전환">
+            <span class="theme-icon-light" aria-hidden="true">🌙</span>
+            <span class="theme-icon-dark" aria-hidden="true">☀️</span>
+          </button>
+        </div>
+      </div>
+    </nav>
+
+    <main class="landing-shell">
+      <section class="section" style="border-top:0">
+        <div class="tool-page-head">
+          <h1>보고서 도구 모음</h1>
+          <p>실험 보고서를 쓸 때 자주 필요한 작업을 빠르게 끝내는 도구들입니다. 모두 <b>브라우저 안에서만</b> 동작하고 입력 내용은 서버로 전송되지 않습니다.</p>
+        </div>
+
+        <div class="feature-grid">
+          <a class="feature-card" href="/tools/word-count.html">
+            <div class="feature-ico">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
+            </div>
+            <h3>글자수 세기</h3>
+            <p>공백 포함/미포함 글자수, 단어수, 줄수, 바이트(UTF-8)를 실시간으로 셉니다. 보고서 분량 제한 맞출 때.</p>
+            <span class="feature-tag">텍스트 → 글자수·바이트</span>
+          </a>
+
+          <a class="feature-card" href="/tools/stats.html">
+            <div class="feature-ico">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l3-4 3 2 4-6"/></svg>
+            </div>
+            <h3>평균·표준편차 계산기</h3>
+            <p>측정값을 붙여넣으면 개수·평균·표준편차·표준오차·범위를 계산합니다. 결과 보고서 데이터 정리에.</p>
+            <span class="feature-tag">데이터 → 평균·SD·SE</span>
+          </a>
+
+          <a class="feature-card" href="/tools/sig-error.html">
+            <div class="feature-ico">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></svg>
+            </div>
+            <h3>유효숫자·오차 계산기</h3>
+            <p>백분율 오차, 유효숫자 반올림, 기본 오차 전파(덧셈·곱셈)를 계산합니다. 측정값과 이론값 비교에.</p>
+            <span class="feature-tag">측정·이론 → % 오차</span>
+          </a>
+
+          <a class="feature-card" href="/equation/index.html">
+            <div class="feature-ico">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 5H9.5a3 3 0 0 0-3 3l-2 11"/><path d="M5 12h8"/><path d="M14 9l5 9M19 9l-5 9"/></svg>
+            </div>
+            <h3>LaTeX → 한글 수식 변환기</h3>
+            <p>LaTeX 수식을 한글(HWP) 수식으로 바꿔 줍니다. 텍스트 변환과 HWP·HWPX 파일 변환 모두 지원.</p>
+            <span class="feature-tag">LaTeX → 한글 수식</span>
+          </a>
+        </div>
+
+        <p class="hint" style="margin-top:22px">더 많은 도구를 추가하는 중입니다 — 단위 변환기, PDF 합치기/나누기, 이미지 변환 등.</p>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-links">
+        <a href="/">메인</a>
+        <a href="/guide.html">이용 가이드</a>
+        <a href="/tools/index.html">도구 모음</a>
+        <a href="/equation/index.html">수식 변환기</a>
+        <a href="https://blog.naver.com/physicjun1905" target="_blank" rel="noopener">블로그</a>
+        <a href="https://github.com/fakeminjun7321/lab-report-generator-web" target="_blank" rel="noopener">GitHub</a>
+      </div>
+      <div class="footer-copy">
+        © 2026 Lab Report Generator Web · MIT License
+      </div>
+    </footer>
+
+    <script src="/theme.js"></script>
+  </body>
+</html>
