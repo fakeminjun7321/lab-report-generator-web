@@ -2125,3 +2125,175 @@ a.btn-outline:hover {
     padding: 44px 0;
   }
 }
+
+/* ============================================================ tool pages (/tools) */
+a.feature-card {
+  text-decoration: none;
+  color: inherit;
+}
+a.feature-card:hover {
+  text-decoration: none;
+}
+
+.tool-page-head {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0 22px;
+}
+.tool-page-head h1 {
+  margin: 0;
+  font-size: clamp(26px, 4vw, 34px);
+  letter-spacing: -0.02em;
+}
+.tool-page-head p {
+  margin: 0;
+  max-width: 70ch;
+  color: var(--text-muted);
+  font-size: 15.5px;
+  line-height: 1.6;
+}
+
+.tool-card {
+  display: grid;
+  gap: 16px;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+textarea.tool-input,
+input.tool-input,
+select.tool-input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+}
+textarea.tool-input {
+  min-height: 120px;
+  resize: vertical;
+  line-height: 1.5;
+}
+.tool-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.tool-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+.tool-label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text-muted);
+}
+
+.tool-result {
+  display: grid;
+  gap: 12px;
+  margin-top: 2px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+}
+.stat-box {
+  padding: 13px 15px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+.stat-label {
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.stat-value {
+  margin-top: 3px;
+  font-size: 21px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+.stat-value.sm {
+  font-size: 16px;
+}
+
+.tool-out-code {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 14px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 네이버 블로그 홍보 스트립 */
+.blog-cta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 20px 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+.blog-cta .blog-ico {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: #03c75a;
+  color: #fff;
+  font-weight: 800;
+  font-size: 20px;
+  flex: 0 0 auto;
+}
+.blog-cta .blog-txt strong {
+  font-size: 15px;
+}
+.blog-cta .blog-txt p {
+  margin: 2px 0 0;
+  color: var(--text-muted);
+  font-size: 13.5px;
+}
+.blog-cta .btn {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 9px 18px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 700;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.blog-cta .btn:hover {
+  background: var(--accent-hover);
+  text-decoration: none;
+}
+@media (max-width: 560px) {
+  .blog-cta .btn {
+    margin-left: 0;
+  }
+}

@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>이용 가이드 — 보고서 작성 툴</title>
+    <meta name="description" content="화학 사전·화학 결과·물리 결과 보고서 생성과 부가 도구 사용법을 단계별로 안내합니다." />
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("theme");
+          if (!t) t = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+          document.documentElement.setAttribute("data-theme", t);
+        } catch (e) {}
+      })();
+    </script>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body class="landing">
+    <div class="landing-bg" aria-hidden="true"></div>
+    <nav class="landing-nav">
+      <div class="landing-nav-inner">
+        <a href="/" class="brand"><span class="brand-mark" aria-hidden="true">R</span> 보고서 작성 툴</a>
+        <div class="landing-nav-actions">
+          <a href="/" class="nav-link">메인</a>
+          <a href="/tools/index.html" class="nav-link">도구 모음</a>
+          <button type="button" id="themeToggle" class="theme-toggle" aria-label="다크 모드로 전환" title="다크 모드로 전환">
+            <span class="theme-icon-light" aria-hidden="true">🌙</span>
+            <span class="theme-icon-dark" aria-hidden="true">☀️</span>
+          </button>
+        </div>
+      </div>
+    </nav>
+
+    <main class="landing-shell">
+      <section class="section" style="border-top:0">
+        <div class="tool-page-head">
+          <h1>이용 가이드</h1>
+          <p>업로드부터 다운로드까지, 보고서 종류별로 어떤 자료를 넣고 어떻게 쓰는지 단계별로 정리했습니다. 생성물은 <b>초안</b>이니 반드시 직접 검토·수정해서 사용하세요.</p>
+        </div>
+
+        <div class="blog-cta" style="margin-bottom:26px">
+          <span class="blog-ico" aria-hidden="true">B</span>
+          <div class="blog-txt">
+            <strong>사용 후기 · 업데이트 소식</strong>
+            <p>네이버 블로그에서 사용 팁과 새 기능 소식을 확인하세요.</p>
+          </div>
+          <a class="btn" href="https://blog.naver.com/physicjun1905" target="_blank" rel="noopener">블로그 보기</a>
+        </div>
+
+        <div class="legal-page" style="padding:0;max-width:none">
+          <section>
+            <h2>0. 시작하기</h2>
+            <ul>
+              <li><b>로그인</b>: 발급받은 이름·비밀번호로 로그인합니다. 만 14세 이상, 약관 동의가 필요합니다.</li>
+              <li><b>크레딧</b>: 보고서 종류별(사전/결과)로 크레딧이 차감됩니다. 화면의 예상 비용은 추정치이며, 실패한 생성은 원칙적으로 차감하지 않습니다. 크레딧은 현재 운영자가 수동 발급합니다.</li>
+              <li><b>보관</b>: 생성 파일은 <b>내 파일</b>에 최대 3개·24시간 임시 보관 후 삭제됩니다. 업로드 원본은 따로 저장하지 않습니다.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2>1. 화학 사전보고서</h2>
+            <p><b>넣는 자료:</b> 실험 매뉴얼 PDF.</p>
+            <ol>
+              <li>보고서 종류에서 <b>화학 사전보고서</b>를 고릅니다.</li>
+              <li>매뉴얼 PDF를 업로드하고, 날짜·학번 등 폼 값을 채웁니다.</li>
+              <li>출력 형식(.docx 또는 .hwpx)과 글꼴을 고릅니다.</li>
+              <li><b>생성</b>을 누르면 이론적 배경·원리, 시약 물성, 실험 기구·과정이 학교 양식으로 작성됩니다.</li>
+            </ol>
+            <p class="hint">팁: 매뉴얼에 Theory &amp; Principle, 시약 정보가 또렷할수록 결과가 좋습니다. 그림이 필요한 부분은 placeholder와 설명으로 표시됩니다.</p>
+          </section>
+
+          <section>
+            <h2>2. 화학 결과보고서</h2>
+            <p><b>넣는 자료:</b> 실험 데이터(엑셀/CSV/텍스트), 실험 사진, (선택) 사전보고서.</p>
+            <ol>
+              <li>보고서 종류에서 <b>화학 결과보고서</b>를 고릅니다.</li>
+              <li>측정 데이터와 사진을 업로드합니다. 데이터 표·그래프 스크린샷도 인식합니다.</li>
+              <li>생성하면 평균·표준편차·백분율 오차 등을 계산하고 표·차트를 그려 사전보고서 뒤 결과 분량을 채웁니다.</li>
+            </ol>
+            <p class="hint">팁: 직접 정리한 엑셀/CSV가 있으면 우선 반영됩니다. 데이터에 없는 값은 만들지 않습니다.</p>
+          </section>
+
+          <section>
+            <h2>3. 물리 결과보고서</h2>
+            <p><b>넣는 자료:</b> PASCO Capstone <code>.cap</code>, 엑셀/CSV/텍스트, 매뉴얼 PDF, 실험 사진 중 하나 이상. 학번은 필수입니다.</p>
+            <ol>
+              <li>보고서 종류에서 <b>물리 결과보고서</b>를 고릅니다.</li>
+              <li><code>.cap</code> 또는 정리한 데이터, 사진을 업로드합니다. 캡스톤의 사용자 입력 표가 있으면 최우선으로 씁니다.</li>
+              <li>생성하면 실험 파트별 표·그래프·분석·결론과 오차 분석이 구성됩니다.</li>
+            </ol>
+            <p class="hint">팁: <code>.cap</code> 원자료와 직접 정리한 엑셀이 충돌하면 정리 파일을 우선합니다. AI 참고 메모에 실험자 의견을 적어두면 보조로 반영됩니다.</p>
+          </section>
+
+          <section>
+            <h2>4. 출력 형식과 글꼴</h2>
+            <ul>
+              <li><b>.docx</b>: 워드/한글에서 열어 편집. <b>.hwpx</b>: 한글 전용, 표·차트·사진·수식 개체가 직접 들어갑니다.</li>
+              <li>글꼴은 폼에서 선택합니다. 생성 후 학교 양식·여백을 한 번 더 확인하세요.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2>5. LaTeX → 한글 수식 변환기</h2>
+            <ul>
+              <li><b>텍스트 변환</b>: <a href="/equation/index.html">수식 변환기</a>에 LaTeX를 붙여넣으면 한글 수식 스크립트가 나옵니다. 복사해 한글의 <b>입력 → 개체 → 수식</b>(Ctrl+N, M)에 붙여넣으세요.</li>
+              <li><b>파일 변환</b>: HWP·HWPX 파일을 올리면 문서 안의 <code>$…$</code> 형태 LaTeX만 한글 수식 개체로 바꿔 새 <code>.hwpx</code>로 내려받습니다. 모든 처리는 브라우저에서 이뤄집니다.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2>6. 도구 모음</h2>
+            <p><a href="/tools/index.html">도구 모음</a>에서 보고서에 자주 필요한 작업을 빠르게 할 수 있습니다(모두 브라우저 전용):</p>
+            <ul>
+              <li><b>글자수 세기</b> — 분량 제한 맞추기.</li>
+              <li><b>평균·표준편차 계산기</b> — 측정값 통계 정리.</li>
+              <li><b>유효숫자·오차 계산기</b> — 백분율 오차·반올림·오차 전파.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2>자주 묻는 질문</h2>
+            <p><b>Q. 생성물을 그대로 제출해도 되나요?</b><br />아니요. 학습 보조용 초안입니다. 사실·계산·출처를 직접 검토·수정하고, 학교·교사의 AI 사용 기준을 따르세요.</p>
+            <p><b>Q. 업로드한 파일은 어떻게 되나요?</b><br />보고서 생성에만 쓰이고, 원본은 따로 저장하지 않습니다. 생성 파일만 최대 24시간 임시 보관됩니다. 자세한 내용은 <a href="/privacy.html">개인정보처리방침</a>을 확인하세요.</p>
+            <p><b>Q. 결과에 오류가 있으면요?</b><br />내용상 오류가 확인되면 <a href="/refund.html">환불정책</a>에 따라 환불 또는 크레딧 복구를 요청할 수 있습니다.</p>
+            <p><b>Q. 권한 없는 학교 자료를 올려도 되나요?</b><br />안 됩니다. 본인이 이용 권한을 가진 자료만 올리세요. 저작권 책임은 사용자에게 있습니다.</p>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-links">
+        <a href="/terms.html">이용약관</a>
+        <a href="/privacy.html">개인정보처리방침</a>
+        <a href="/refund.html">환불정책</a>
+        <a href="/changelog.html">패치노트</a>
+        <a href="/tools/index.html">도구 모음</a>
+        <a href="https://blog.naver.com/physicjun1905" target="_blank" rel="noopener">블로그</a>
+        <a href="https://github.com/fakeminjun7321/lab-report-generator-web" target="_blank" rel="noopener">GitHub</a>
+      </div>
+      <div class="footer-copy">© 2026 Lab Report Generator Web · MIT License</div>
+    </footer>
+
+    <script src="/theme.js"></script>
+  </body>
+</html>
