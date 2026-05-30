@@ -40,6 +40,10 @@
 
         <div class="tool-card">
           <textarea id="stInput" class="tool-input" placeholder="예: 9.78  9.81  9.79  9.83  9.80&#10;또는 줄바꿈/쉼표로 구분해 입력" autofocus></textarea>
+          <details>
+            <summary style="cursor:pointer;color:var(--accent-text);font-weight:650;font-size:14px">📊 엑셀/CSV에서 가져오기</summary>
+            <div id="stFile" style="margin-top:12px"></div>
+          </details>
           <div id="stResult" class="tool-result" style="display:none">
             <div class="stat-grid">
               <div class="stat-box"><div class="stat-label">개수 (n)</div><div class="stat-value" id="stN">0</div></div>
@@ -69,6 +73,7 @@
       <div class="footer-copy">© 2026 Lab Report Generator Web · MIT License</div>
     </footer>
 
+    <script src="/tools/data-input.js"></script>
     <script src="/theme.js"></script>
     <script>
       (function () {
@@ -84,8 +89,7 @@
           var m = s.match(/-?\d*\.?\d+(?:[eE][-+]?\d+)?/g) || [];
           return m.map(Number).filter(function (x) { return isFinite(x); });
         }
-        function update() {
-          var xs = parseNums(ta.value);
+        function render(xs) {
           var n = xs.length;
           if (n === 0) { box.style.display = "none"; return; }
           box.style.display = "grid";
@@ -112,8 +116,9 @@
             n < 2 ? "표본 표준편차·표준오차는 값이 2개 이상일 때 계산됩니다." :
             "표본 표준편차 s는 n−1로 나눈 값(불편추정), 모집단 σ는 n으로 나눈 값입니다.";
         }
-        ta.addEventListener("input", update);
-        update();
+        ta.addEventListener("input", function () { render(parseNums(ta.value)); });
+        if (window.DataInput) DataInput.mount(document.getElementById("stFile"), { columns: [{ key: "v", label: "값 열" }], onData: function (rows) { render(rows.map(function (r) { return r.v; })); } });
+        render([]);
       })();
     </script>
   </body>

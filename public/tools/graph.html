@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>그래프 생성기 — 보고서 도구</title>
+    <meta name="description" content="데이터를 붙여넣어 산점도·꺾은선·막대 그래프를 그리고 PNG로 내려받는 브라우저 도구." />
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("theme");
+          if (!t) t = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+          document.documentElement.setAttribute("data-theme", t);
+        } catch (e) {}
+      })();
+    </script>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body class="landing">
+    <div class="landing-bg" aria-hidden="true"></div>
+    <nav class="landing-nav">
+      <div class="landing-nav-inner">
+        <a href="/" class="brand"><span class="brand-mark" aria-hidden="true">R</span> 보고서 작성 툴</a>
+        <div class="landing-nav-actions">
+          <a href="/tools/index.html" class="nav-link">← 도구 모음</a>
+          <button type="button" id="themeToggle" class="theme-toggle" aria-label="다크 모드로 전환" title="다크 모드로 전환">
+            <span class="theme-icon-light" aria-hidden="true">🌙</span>
+            <span class="theme-icon-dark" aria-hidden="true">☀️</span>
+          </button>
+        </div>
+      </div>
+    </nav>
+
+    <main class="landing-shell">
+      <section class="section" style="border-top:0">
+        <div class="tool-page-head">
+          <h1>그래프 생성기</h1>
+          <p>데이터를 붙여넣어 산점도·꺾은선·막대 그래프를 그리고, 흰 배경 PNG로 받아 보고서에 넣습니다.</p>
+        </div>
+
+        <div class="tool-card">
+          <div class="tool-row">
+            <label class="tool-label">그래프 종류
+              <select id="gType" class="tool-input">
+                <option value="scatter">산점도</option>
+                <option value="line">꺾은선</option>
+                <option value="bar">막대</option>
+              </select>
+            </label>
+            <label class="tool-label">그래프 제목<input id="gTitle" class="tool-input" placeholder="예: 농도별 흡광도" /></label>
+            <label class="tool-label">X축 이름<input id="gX" class="tool-input" placeholder="예: 농도 (M)" /></label>
+            <label class="tool-label">Y축 이름<input id="gY" class="tool-input" placeholder="예: 흡광도" /></label>
+          </div>
+          <label class="tool-label"><span id="gHint">데이터 (한 줄에 <b>x y</b>)</span>
+            <textarea id="gIn" class="tool-input" placeholder="예:&#10;1  2.1&#10;2  3.9&#10;3  6.2&#10;4  7.8"></textarea>
+          </label>
+          <details>
+            <summary style="cursor:pointer;color:var(--accent-text);font-weight:650;font-size:14px">📊 엑셀/CSV에서 가져오기 (산점도·꺾은선)</summary>
+            <div id="gFile" style="margin-top:12px"></div>
+          </details>
+          <label class="check-line" id="gTrendWrap"><input type="checkbox" id="gTrend" /> <span>선형 추세선 추가 (산점도·꺾은선)</span></label>
+
+          <div id="gOut" class="tool-result" style="display:none">
+            <div style="background:#fff;border-radius:10px;padding:10px;border:1px solid var(--border)">
+              <canvas id="gChart" height="300"></canvas>
+            </div>
+            <button class="btn-lg btn-primary" id="gDl" style="min-height:42px;padding:9px 18px;font-size:14px;justify-self:start">↓ 그래프 PNG 다운로드</button>
+          </div>
+          <p class="hint" id="gMsg" style="margin:0"></p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-links">
+        <a href="/">메인</a>
+        <a href="/tools/index.html">도구 모음</a>
+        <a href="/guide.html">이용 가이드</a>
+        <a href="https://blog.naver.com/physicjun1905" target="_blank" rel="noopener">블로그</a>
+      </div>
+      <div class="footer-copy">© 2026 Lab Report Generator Web · MIT License · 그래프: Chart.js (MIT)</div>
+    </footer>
+
+    <script src="/tools/vendor/chart.umd.min.js"></script>
+    <script src="/tools/data-input.js"></script>
+    <script src="/theme.js"></script>
+    <script>
+      (function () {
+        var inp = document.getElementById("gIn"), out = document.getElementById("gOut"), msg = document.getElementById("gMsg");
+        var typeSel = document.getElementById("gType"), trendWrap = document.getElementById("gTrendWrap"), gHint = document.getElementById("gHint");
+        var chart = null, fileRows = null;
+        var whiteBg = { id: "whiteBg", beforeDraw: function (c) { var x = c.ctx; x.save(); x.globalCompositeOperation = "destination-over"; x.fillStyle = "#ffffff"; x.fillRect(0, 0, c.width, c.height); x.restore(); } };
+
+        function parseXY(s) {
+          var pts = [];
+          s.split(/\r?\n/).forEach(function (l) { var m = l.match(/-?\d*\.?\d+(?:[eE][-+]?\d+)?/g); if (m && m.length >= 2) pts.push({ x: +m[0], y: +m[1] }); });
+          return pts.filter(function (p) { return isFinite(p.x) && isFinite(p.y); });
+        }
+        function parseBar(s) {
+          var labels = [], vals = [];
+          s.split(/\r?\n/).forEach(function (l) {
+            l = l.trim(); if (!l) return;
+            var m = l.match(/^(.*?)[\s,]+(-?\d*\.?\d+(?:[eE][-+]?\d+)?)\s*$/);
+            if (m) { labels.push(m[1].trim()); vals.push(+m[2]); }
+          });
+          return { labels: labels, vals: vals };
+        }
+        function fit(pts) {
+          var n = pts.length; if (n < 2) return null;
+          var sx = 0, sy = 0; pts.forEach(function (p) { sx += p.x; sy += p.y; });
+          var mx = sx / n, my = sy / n, sxx = 0, sxy = 0;
+          pts.forEach(function (p) { sxx += (p.x - mx) * (p.x - mx); sxy += (p.x - mx) * (p.y - my); });
+          if (!sxx) return null; var slope = sxy / sxx; return { slope: slope, inter: my - slope * mx };
+        }
+        function axisOpts(title) {
+          var xl = document.getElementById("gX").value, yl = document.getElementById("gY").value, t = document.getElementById("gTitle").value;
+          return {
+            responsive: true, animation: false, color: "#333",
+            plugins: { legend: { display: t || false, labels: { color: "#333" } }, title: { display: !!t, text: t, color: "#222", font: { size: 15 } } },
+            scales: {
+              x: { title: { display: !!xl, text: xl, color: "#333" }, ticks: { color: "#444" }, grid: { color: "#e3e6ea" } },
+              y: { title: { display: !!yl, text: yl, color: "#333" }, ticks: { color: "#444" }, grid: { color: "#e3e6ea" }, beginAtZero: title === "bar" }
+            }
+          };
+        }
+        function update() {
+          var type = typeSel.value;
+          trendWrap.style.display = type === "bar" ? "none" : "flex";
+          gHint.innerHTML = type === "bar" ? "데이터 (한 줄에 <b>이름, 값</b>)" : "데이터 (한 줄에 <b>x y</b>)";
+          var data, opts = axisOpts(type);
+          if (type === "bar") {
+            var b = parseBar(inp.value);
+            if (b.vals.length < 1) { out.style.display = "none"; msg.textContent = inp.value.trim() ? "‘이름, 값’ 형식으로 입력하세요." : ""; return; }
+            opts.scales.x.type = "category";
+            data = { labels: b.labels, datasets: [{ label: document.getElementById("gY").value || "값", data: b.vals, backgroundColor: "#2f6df6" }] };
+          } else {
+            var pts = (fileRows && fileRows.length) ? fileRows.map(function (r) { return { x: r.x, y: r.y }; }) : parseXY(inp.value);
+            if (pts.length < 1) { out.style.display = "none"; msg.textContent = inp.value.trim() ? "‘x y’ 형식으로 입력하세요." : ""; return; }
+            opts.scales.x.type = "linear";
+            var ds = [{ label: "데이터", data: pts, backgroundColor: "#2f6df6", borderColor: "#2f6df6", showLine: type === "line", pointRadius: 4, fill: false, tension: 0 }];
+            if (document.getElementById("gTrend").checked) {
+              var f = fit(pts);
+              if (f) {
+                var xs = pts.map(function (p) { return p.x; }), mn = Math.min.apply(null, xs), mx = Math.max.apply(null, xs);
+                ds.push({ label: "추세선", type: "line", data: [{ x: mn, y: f.slope * mn + f.inter }, { x: mx, y: f.slope * mx + f.inter }], borderColor: "#e0457b", borderWidth: 2, pointRadius: 0, fill: false });
+                opts.plugins.legend.display = true;
+              }
+            }
+            data = { datasets: ds };
+          }
+          msg.textContent = "";
+          out.style.display = "grid";
+          if (chart) chart.destroy();
+          chart = new Chart(document.getElementById("gChart"), { type: type === "bar" ? "bar" : "scatter", data: data, options: opts, plugins: [whiteBg] });
+        }
+        inp.addEventListener("input", function () { fileRows = null; update(); });
+        typeSel.addEventListener("change", update);
+        if (window.DataInput) DataInput.mount(document.getElementById("gFile"), { columns: [{ key: "x", label: "X 열" }, { key: "y", label: "Y 열" }], onData: function (rows) { fileRows = rows; if (typeSel.value === "bar") typeSel.value = "scatter"; update(); } });
+        ["gTitle", "gX", "gY", "gTrend"].forEach(function (id) { var e = document.getElementById(id); e.addEventListener("input", update); e.addEventListener("change", update); });
+        document.getElementById("gDl").addEventListener("click", function () {
+          if (!chart) return;
+          var a = document.createElement("a"); a.href = chart.toBase64Image("image/png", 1);
+          a.download = (document.getElementById("gTitle").value || "그래프") + ".png"; a.click();
+        });
+      })();
+    </script>
+  </body>
+</html>
