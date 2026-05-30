@@ -692,11 +692,19 @@ def add_phys_page_number_to_footer(doc):
             return
 
 
+_PIC_SEQ = 0
+
+
 def append_picture_to_paragraph(doc, para, data, *, fmt="png", caption="",
                                 max_width=MAX_IMAGE_WIDTH,
                                 max_height=MAX_IMAGE_HEIGHT):
     if not data:
         return False
+    # 그림 식별자를 id(data)로 만들면 동일 프로세스에서 버퍼가 GC·재사용될 때
+    # 값이 충돌해 다중 이미지 HWPX가 깨질 수 있다. 단조 증가 카운터로 고유 보장. (코드 리뷰 ⑨)
+    global _PIC_SEQ
+    _PIC_SEQ += 1
+    _pic_id = 1900000000 + _PIC_SEQ
     width_px, height_px = image_size(data)
     width, height, org_width, org_height = fit_size(
         width_px, height_px, max_width, max_height,
@@ -705,7 +713,7 @@ def append_picture_to_paragraph(doc, para, data, *, fmt="png", caption="",
     pic = para.add_shape(
         "pic",
         attributes={
-            "id": str(id(data) & 0x7FFFFFFF),
+            "id": str(_pic_id),
             "zOrder": "1",
             "numberingType": "PICTURE",
             "textWrap": "TOP_AND_BOTTOM",
@@ -714,7 +722,7 @@ def append_picture_to_paragraph(doc, para, data, *, fmt="png", caption="",
             "dropcapstyle": "None",
             "href": "",
             "groupLevel": "0",
-            "instid": str((id(data) + 17) & 0x7FFFFFFF),
+            "instid": str(_pic_id + 100000000),
             "reverse": "0",
         },
     ).element
@@ -1164,6 +1172,7 @@ def main():
     else:
         content = json.loads(sys.stdin.read())
 
+    content = pre._deep_clean_xml(content)  # XML 비허용 제어문자 제거 (코드 리뷰 ⑧)
     doc = generate_hwpx(content)
 
     if len(sys.argv) >= 3:
