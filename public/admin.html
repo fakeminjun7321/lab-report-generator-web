@@ -85,8 +85,7 @@
           <thead>
             <tr>
               <th>이름</th>
-              <th>사전 잔액</th>
-              <th>결과 잔액</th>
+              <th>크레딧</th>
               <th>누적 사용</th>
               <th>관리자</th>
               <th>시간당</th>
@@ -191,17 +190,27 @@
         }
       }
 
-      // 단가 (server lib/pricing.js와 동기화). 충전 시 N건 → N×단가 USD로 변환.
-      const PRE_PRICE_USD = 0.81;
-      const RESULT_PRICE_USD = 1.02;
-
-      function balanceCell(usd, unitUsd) {
-        const v = Number(usd) || 0;
-        const count = unitUsd > 0 ? Math.floor(v / unitUsd) : 0;
-        const krw = Math.round(v * krwPerUsd).toLocaleString();
+      // 통합 크레딧 포인트제: 모델별 과금(Opus 3 / Sonnet 1).
+      function modelShort(m) {
+        if (!m) return "";
+        if (m.indexOf("opus") >= 0) return "Opus";
+        if (m.indexOf("sonnet") >= 0) return "Sonnet";
+        return m;
+      }
+      function creditCell(u) {
+        if (u.unlimited) {
+          const m = u.restricted_model
+            ? " · " + modelShort(u.restricted_model) + "만"
+            : "";
+          return `<span style="color: var(--text-muted)">무제한${m}</span>`;
+        }
+        const c = Math.max(0, Math.trunc(Number(u.credits) || 0));
         const color =
-          count === 0 ? "var(--danger)" : count <= 1 ? "var(--warning)" : "var(--text)";
-        return `<span style="color: ${color}">${count}건 ($${v.toFixed(3)} ≈ ₩${krw})</span>`;
+          c === 0 ? "var(--danger)" : c <= 3 ? "var(--warning)" : "var(--text)";
+        const restr = u.restricted_model
+          ? ` <small style="color:var(--text-muted)">(${modelShort(u.restricted_model)}만)</small>`
+          : "";
+        return `<span style="color: ${color}">${c} 크레딧</span>${restr}`;
       }
 
       function renderUsers(users) {
@@ -221,11 +230,8 @@
           const tr = document.createElement("tr");
           tr.innerHTML = `
             <td>${escape(u.name)}</td>
-            <td>${balanceCell(u.pre_credits_usd, PRE_PRICE_USD)}<br>
-              <button data-act="topup-pre" data-id="${u.id}" style="font-size: 11px; padding: 3px 6px;">+ 충전</button>
-            </td>
-            <td>${balanceCell(u.result_credits_usd, RESULT_PRICE_USD)}<br>
-              <button data-act="topup-result" data-id="${u.id}" style="font-size: 11px; padding: 3px 6px;">+ 충전</button>
+            <td>${creditCell(u)}<br>
+              <button data-act="topup" data-id="${u.id}" style="font-size: 11px; padding: 3px 6px;">+ 충전</button>
             </td>
             <td>${fmtBoth(u.spent_usd)}</td>
             <td>${isAdmin ? "✓" : ""}</td>
@@ -266,33 +272,22 @@
           loadUsers();
           return;
         }
-        if (act === "topup-pre" || act === "topup-result") {
-          const field = act === "topup-pre" ? "pre" : "result";
-          const label = field === "pre" ? "사전" : "결과";
-          const unit = field === "pre" ? PRE_PRICE_USD : RESULT_PRICE_USD;
-          const krwPerCount = Math.round(unit * krwPerUsd);
+        if (act === "topup") {
           const input = prompt(
-            `${label} 보고서 충전\n` +
-              `1건 = $${unit.toFixed(2)} ≈ ₩${krwPerCount.toLocaleString()}\n\n` +
-              `몇 건 충전할까요? (숫자만 입력)`,
-            "5",
+            "크레딧 충전\nOpus 1건 = 3크레딧 / Sonnet 1건 = 1크레딧\n\n" +
+              "몇 크레딧 충전할까요? (숫자만 입력)",
+            "9",
           );
           if (input == null) return;
-          const count = parseInt(input, 10);
-          if (!Number.isFinite(count) || count <= 0) {
+          const credits = parseInt(input, 10);
+          if (!Number.isFinite(credits) || credits <= 0) {
             return alert("1 이상의 정수를 입력하세요.");
           }
-          const totalKrw = count * krwPerCount;
-          if (
-            !confirm(
-              `${label} ${count}건 = $${(unit * count).toFixed(2)} ≈ ₩${totalKrw.toLocaleString()}\n충전하시겠습니까?`,
-            )
-          )
-            return;
+          if (!confirm(`${credits} 크레딧 충전하시겠습니까?`)) return;
           const res = await fetch(`/api/admin/users/${id}/topup`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ field, count }),
+            body: JSON.stringify({ credits }),
           });
           if (!res.ok) {
             const e = await res.json();
