@@ -1,0 +1,27 @@
+name: Keepalive
+# Render 무료 웹서비스(15분 무활동 시 잠듦)와 Supabase 무료 프로젝트(7일 무활동 시 일시정지)를
+# 깨우기 위해 /api/keepalive 를 주기적으로 호출한다.
+# 공개 repo라 GitHub Actions 사용량이 무제한 → 분 소진으로 멈추지 않는다.
+on:
+  schedule:
+    - cron: "*/5 * * * *"   # 5분마다 (15분 잠듦 한계보다 충분히 짧게)
+  workflow_dispatch:
+
+concurrency:
+  group: keepalive
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping keepalive (Render + Supabase)
+        run: |
+          URL="https://chem-pre-lab-web.onrender.com/api/keepalive"
+          # cron 지연을 흡수하려고 한 번의 run에서 2번(0분, 2분 지점) 친다.
+          for i in 1 2; do
+            echo "ping #$i $(date -u)"
+            curl -fsS --max-time 60 --retry 3 --retry-delay 5 --retry-all-errors "$URL" \
+              && echo " -> OK" || echo " -> FAIL (best-effort, 무시)"
+            [ "$i" -eq 1 ] && sleep 120
+          done
