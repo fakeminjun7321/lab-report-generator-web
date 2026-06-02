@@ -18,10 +18,14 @@ jobs:
       - name: Ping keepalive (Render + Supabase)
         run: |
           URL="https://chem-pre-lab-web.onrender.com/api/keepalive"
-          # cron 지연을 흡수하려고 한 번의 run에서 2번(0분, 2분 지점) 친다.
+          # cron 지연을 흡수하려고 한 run에서 2번(0분, 2분 지점) 친다. 핑 실패는 무시(best-effort).
           for i in 1 2; do
-            echo "ping #$i $(date -u)"
-            curl -fsS --max-time 60 --retry 3 --retry-delay 5 --retry-all-errors "$URL" \
-              && echo " -> OK" || echo " -> FAIL (best-effort, 무시)"
-            [ "$i" -eq 1 ] && sleep 120
+            echo "ping #$i at $(date -u)"
+            if curl -fsS --max-time 60 --retry 3 --retry-delay 5 --retry-all-errors "$URL"; then
+              echo " -> OK"
+            else
+              echo " -> FAIL (best-effort, 무시)"
+            fi
+            if [ "$i" -eq 1 ]; then sleep 120; fi
           done
+          echo "keepalive done"
