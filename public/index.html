@@ -73,9 +73,8 @@
     </div>
     <div class="report-toolbar">
       <div id="balanceBox" class="balance-box" style="display: none">
-        <strong>내 잔액</strong>
-        <span id="balPre">사전: ...</span>
-        <span id="balResult">결과: ...</span>
+        <strong>내 크레딧</strong>
+        <span id="balCredits">...</span>
       </div>
 
       <div id="reportTypeFieldset" role="radiogroup" aria-labelledby="reportTypeLegend">
@@ -159,7 +158,7 @@
             <span class="field-label">AI 참고 메모 / 내 의견 (선택)</span>
             <textarea id="crUserNotes" name="userNotes" rows="4" maxlength="12000" placeholder="예: 색 변화가 예상보다 늦게 나타났고, 마지막 적정값은 종말점 판단이 애매해서 오차 분석에 반영하고 싶음"></textarea>
           </label>
-          <small>.md/.txt 파일로 길게 작성한 메모도 함께 첨부할 수 있습니다.</small>
+          <small>.md/.txt 파일로 길게 작성한 메모도 함께 첨부할 수 있습니다. <a href="/examples.html#notes" target="_blank" rel="noopener">작성 가이드·예시 보기 →</a></small>
           <input id="crUserNotesFile" name="userNotesFile" type="file" accept=".md,.txt,text/markdown,text/plain" aria-label="참고 메모 파일" />
         </div>
       </div>
@@ -191,7 +190,13 @@
         <div class="form-section-head">
           <span class="form-section-title">출력 설정</span>
         </div>
-        <input type="hidden" name="crModel" value="claude-opus-4-8" />
+        <div class="seg-group" style="margin-bottom: 12px">
+          <span class="field-label">AI 모델 (보고서 1건당 크레딧)</span>
+          <div class="segmented">
+            <label><input type="radio" name="crModel" value="claude-opus-4-8" checked /> Opus 4.8 · 3크레딧</label>
+            <label><input type="radio" name="crModel" value="claude-sonnet-4-6" /> Sonnet 4.6 · 1크레딧</label>
+          </div>
+        </div>
         <div class="field-grid cols-3">
           <div class="seg-group">
             <span class="field-label">출력 형식</span>
@@ -293,7 +298,7 @@
             <span class="field-label">AI 참고 메모 / 내 의견 (선택)</span>
             <textarea id="prUserNotes" name="userNotes" rows="4" maxlength="12000" placeholder="예: 예비 시행 1회는 포토게이트가 흔들려 제외했고, 재측정에서는 트랙 이음새를 지나며 카트가 살짝 튀는 현상이 있었음"></textarea>
           </label>
-          <small>.md/.txt 파일로 길게 작성한 메모도 함께 첨부할 수 있습니다.</small>
+          <small>.md/.txt 파일로 길게 작성한 메모도 함께 첨부할 수 있습니다. <a href="/examples.html#notes" target="_blank" rel="noopener">작성 가이드·예시 보기 →</a></small>
           <input id="prUserNotesFile" name="userNotesFile" type="file" accept=".md,.txt,text/markdown,text/plain" aria-label="참고 메모 파일" />
         </div>
       </div>
@@ -315,7 +320,13 @@
         <div class="form-section-head">
           <span class="form-section-title">출력 설정</span>
         </div>
-        <input type="hidden" name="prModel" value="claude-opus-4-8" />
+        <div class="seg-group" style="margin-bottom: 12px">
+          <span class="field-label">AI 모델 (보고서 1건당 크레딧)</span>
+          <div class="segmented">
+            <label><input type="radio" name="prModel" value="claude-opus-4-8" checked /> Opus 4.8 · 3크레딧</label>
+            <label><input type="radio" name="prModel" value="claude-sonnet-4-6" /> Sonnet 4.6 · 1크레딧</label>
+          </div>
+        </div>
         <div class="field-grid">
           <div class="seg-group">
             <span class="field-label">출력 형식</span>
@@ -371,7 +382,7 @@
             <span class="field-label">AI 참고 메모 / 내 의견 (선택)</span>
             <textarea id="preUserNotes" name="userNotes" rows="4" maxlength="12000" placeholder="예: 선생님이 안전 주의와 수율 계산을 특히 강조했고, 실험 과정에서 왜 ice bath를 쓰는지 자세히 설명하고 싶음"></textarea>
           </label>
-          <small>.md/.txt 파일로 길게 작성한 메모도 함께 첨부할 수 있습니다.</small>
+          <small>.md/.txt 파일로 길게 작성한 메모도 함께 첨부할 수 있습니다. <a href="/examples.html#notes" target="_blank" rel="noopener">작성 가이드·예시 보기 →</a></small>
           <input id="preUserNotesFile" name="userNotesFile" type="file" accept=".md,.txt,text/markdown,text/plain" aria-label="참고 메모 파일" />
         </div>
       </div>
@@ -408,7 +419,13 @@
         <div class="form-section-head">
           <span class="form-section-title">출력 설정</span>
         </div>
-        <input type="hidden" name="model" value="claude-opus-4-8" />
+        <div class="seg-group" style="margin-bottom: 12px">
+          <span class="field-label">AI 모델 (보고서 1건당 크레딧)</span>
+          <div class="segmented">
+            <label><input type="radio" name="model" value="claude-opus-4-8" checked /> Opus 4.8 · 3크레딧</label>
+            <label><input type="radio" name="model" value="claude-sonnet-4-6" /> Sonnet 4.6 · 1크레딧</label>
+          </div>
+        </div>
         <div class="field-grid cols-3">
           <div class="seg-group">
             <span class="field-label">출력 형식</span>
@@ -589,6 +606,7 @@
         <a href="/changelog.html">패치노트</a>
         <a href="/tools/index.html">도구 모음</a>
         <a href="/guide.html">이용 가이드</a>
+        <a href="/examples.html">예시 모음</a>
         <a href="https://blog.naver.com/physicjun1905" target="_blank" rel="noopener">블로그</a>
         <a href="https://github.com/fakeminjun7321/lab-report-generator-web" target="_blank" rel="noopener">GitHub</a>
       </div>
@@ -661,15 +679,26 @@
           if (!r.ok) return;
           const b = await r.json();
           if (b.isAdmin) return; // admin은 잔액 X
-          const rate = b.krwPerUsd || 1400;
-          const preCount = b.preUnitUsd > 0 ? Math.floor(b.preUsd / b.preUnitUsd) : 0;
-          const resultCount = b.resultUnitUsd > 0 ? Math.floor(b.resultUsd / b.resultUnitUsd) : 0;
-          const preKrw = Math.round(b.preUsd * rate).toLocaleString();
-          const resultKrw = Math.round(b.resultUsd * rate).toLocaleString();
-          document.getElementById("balPre").textContent =
-            `사전 ${preCount}건 (₩${preKrw})`;
-          document.getElementById("balResult").textContent =
-            `결과 ${resultCount}건 (₩${resultKrw})`;
+          // 모델 제한 계정(예: 베타테스터): 허용 모델만 남기고 나머지 라디오 숨김
+          if (b.restrictedModel) {
+            document
+              .querySelectorAll(
+                'input[name="model"], input[name="crModel"], input[name="prModel"]',
+              )
+              .forEach((el) => {
+                const lbl = el.closest("label");
+                if (el.value !== b.restrictedModel) {
+                  el.checked = false;
+                  if (lbl) lbl.style.display = "none";
+                } else {
+                  el.checked = true;
+                }
+              });
+          }
+          const credits = Math.max(0, Math.trunc(Number(b.credits) || 0));
+          document.getElementById("balCredits").textContent = b.unlimited
+            ? "무제한 (베타)"
+            : `${credits} 크레딧`;
           document.getElementById("balanceBox").style.display = "flex";
           document.querySelector(".report-toolbar")?.classList.add("has-balance");
         } catch (_) {
@@ -1182,11 +1211,11 @@
       }
 
       function getSelectedModel() {
-        // 현재 Sonnet 4.6 고정(hidden input). 라디오 노출 시 :checked 우선으로 동작.
+        // 모델 라디오에서 선택값 (없으면 기본 Opus 4.8).
         const el =
           document.querySelector('input[name="model"]:checked') ||
           document.querySelector('input[name="model"]');
-        return el ? el.value : "claude-sonnet-4-6";
+        return el ? el.value : "claude-opus-4-8";
       }
 
       function getModelLabel(modelId) {
@@ -1452,13 +1481,11 @@
         const photos = Array.from(document.getElementById("crPhotos").files);
         const manual = document.getElementById("crManual").files[0] || null;
 
-        // :checked 셀렉터는 hidden input을 매칭 못하므로,
-        // 라디오가 비활성(주석 처리)된 현재는 hidden input value를 fallback으로.
-        // Sonnet 복구 시: 라디오 주석 해제 + fallback을 "claude-sonnet-4-6"로.
+        // 모델 라디오에서 선택값 (없으면 기본 Opus 4.8).
         const crModel =
           document.querySelector('input[name="crModel"]:checked')?.value ||
           document.querySelector('input[name="crModel"]')?.value ||
-          "claude-sonnet-4-6";
+          "claude-opus-4-8";
         const modelLabel = getModelLabel(crModel);
         const crStyle =
           document.querySelector('input[name="crStyle"]:checked')?.value ||
@@ -1560,13 +1587,11 @@
           return;
         }
 
-        // :checked 셀렉터는 hidden input을 매칭 못하므로,
-        // 라디오가 비활성(주석 처리)된 현재는 hidden input value를 fallback으로.
-        // Sonnet 복구 시: 라디오 주석 해제 + fallback을 "claude-sonnet-4-6"로.
+        // 모델 라디오에서 선택값 (없으면 기본 Opus 4.8).
         const prModel =
           document.querySelector('input[name="prModel"]:checked')?.value ||
           document.querySelector('input[name="prModel"]')?.value ||
-          "claude-sonnet-4-6";
+          "claude-opus-4-8";
         const modelLabel = getModelLabel(prModel);
         const prFormat = getPhysResultFormat();
         updatePhysResultFontOptions();

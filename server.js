@@ -483,6 +483,8 @@ app.post("/api/login", async (req, res) => {
       name: user.name,
       studentId: normalizeStudentId(user.student_id),
       isAdmin: !!user.is_admin,
+      unlimited: !!user.unlimited,
+      restrictedModel: user.restricted_model || null,
     };
     console.log(`[login] ${user.name} (admin=${user.is_admin})`);
     return res.json({
@@ -558,6 +560,8 @@ app.post("/api/signup", async (req, res) => {
       name: user.name,
       studentId: normalizeStudentId(user.student_id),
       isAdmin: false,
+      unlimited: false,
+      restrictedModel: null,
     };
     console.log(`[signup] ${user.name}`);
     return res.json({ ok: true, user: user.name, isAdmin: false });
@@ -853,20 +857,37 @@ app.post(
       }
     }
 
-    // 종류별 잔액 검증 (Supabase enabled + 일반 사용자)
-    // 사전 보고서는 pre_credits_usd, 결과 보고서는 result_credits_usd 사용
-    const reportPrice = pricing.getReportPrice(reportType);
-    if (supa.isEnabled() && userInfo.id && !userInfo.isAdmin) {
+    // ── 모델 결정 (통합 크레딧 포인트제: 모델별 과금 Opus 3 / Sonnet 1) ──────────
+    // 화이트리스트 검증으로 임의 모델 주입 차단. 기본 Opus 4.8.
+    const ALLOWED_MODELS = [
+      "claude-opus-4-8",
+      "claude-opus-4-7",
+      "claude-sonnet-4-6",
+    ];
+    const requestedModel = String(req.body.model || "").trim();
+    let model = ALLOWED_MODELS.includes(requestedModel) ? requestedModel : null;
+    // 모델 제한 계정(예: 베타테스터)은 허용 모델로 강제
+    if (userInfo.restrictedModel) {
+      model = ALLOWED_MODELS.includes(userInfo.restrictedModel)
+        ? userInfo.restrictedModel
+        : "claude-sonnet-4-6";
+    }
+    if (!model) model = "claude-opus-4-8"; // 기본 = Opus 4.8
+    const creditCost = pricing.getModelCredits(model);
+
+    // 크레딧 검증 (Supabase + 일반 사용자. admin·무제한 계정은 제외)
+    if (
+      supa.isEnabled() &&
+      userInfo.id &&
+      !userInfo.isAdmin &&
+      !userInfo.unlimited
+    ) {
       try {
-        const check = await supa.checkCreditBalance(
-          userInfo.id,
-          pipeline.creditField,
-          reportPrice,
-        );
-        if (!check.ok) {
-          return res
-            .status(402)
-            .json({ error: "🚫 " + (check.reason || "잔액 부족") });
+        const have = await supa.getCredits(userInfo.id);
+        if (have < creditCost) {
+          return res.status(402).json({
+            error: `🚫 크레딧 부족 (보유 ${have} / 필요 ${creditCost}). 관리자에게 충전을 요청하세요.`,
+          });
         }
       } catch (e) {
         console.error("[credit] error:", e);
@@ -895,11 +916,7 @@ app.post(
           filesByField.data?.[0]
         : filesByField[pipeline.filenameSourceField]?.[0];
     const sourceFilename = sourceFile?.originalname || "";
-    // 사용자가 폼에서 선택한 모델. 화이트리스트 검증으로 임의 모델 주입 차단.
-    // Opus 4.8 기본(품질 우선). 4.7도 하위호환으로 허용. Sonnet도 쓰려면 "claude-sonnet-4-6" 추가.
-    const ALLOWED_MODELS = ["claude-opus-4-8", "claude-opus-4-7"];
-    const requestedModel = String(req.body.model || "").trim();
-    const model = ALLOWED_MODELS.includes(requestedModel) ? requestedModel : null;
+    // 모델·크레딧 단가(model, creditCost)는 위 잔액 검증 단계에서 이미 결정됨.
 
     // 모든 검증 통과 — 일반 사용자는 rate limit 카운트 증가
     if (!userInfo.isAdmin && userInfo.id) {
@@ -925,6 +942,8 @@ app.post(
 
     const job = createJob(userInfo);
     job.reportType = reportType;
+    job.model = model;
+    job.creditCost = creditCost;
     if (userInfo.id) {
       activeJobByUser.set(userInfo.id, job.id);
     }
@@ -1245,29 +1264,23 @@ async function runGeneration(job, pipeline, pipelineInput, meta) {
         pushProgress(job, `⚠ 사용량 통계 기록 실패: ${e.message}`);
       }
 
-      // 2) 종류별 잔액 차감 (admin이 아닌 일반 사용자만).
-      //    차감 실패는 '미청구 보고서'(돈 손실)이므로 절대 조용히 넘기지 않고
-      //    감사 가능한 error 로그 + 사용자 표시로 남긴다.
+      // 2) 크레딧 차감 (admin·무제한 계정 제외). 모델별 단가(Opus 3 / Sonnet 1).
+      //    차감 실패는 '미청구 보고서'(손실)이므로 조용히 넘기지 않고 감사 로그 + 사용자 표시.
       const userIsAdmin = !!job.userInfo.isAdmin;
-      if (!userIsAdmin && pipeline.creditField) {
-        const price = pricing.getReportPrice(job.reportType);
+      const userUnlimited = !!job.userInfo.unlimited;
+      if (
+        !userIsAdmin &&
+        !userUnlimited &&
+        supa.isEnabled() &&
+        job.userInfo.id
+      ) {
+        const cost = job.creditCost || pricing.getModelCredits(job.model);
         try {
-          const { newBalance } = await supa.deductCredit(
-            job.userInfo.id,
-            pipeline.creditField,
-            price,
-          );
-          const krwRate = await getKrwPerUsd();
-          const krw = Math.round(newBalance * krwRate);
-          const remainingCount = Math.floor(newBalance / price);
-          const label = pipeline.creditField === "pre" ? "사전" : "결과";
-          pushProgress(
-            job,
-            `💳 ${label} 잔액: $${newBalance.toFixed(3)} ≈ ₩${krw.toLocaleString()} (약 ${remainingCount}건 남음)`,
-          );
+          const { newBalance } = await supa.spendCredits(job.userInfo.id, cost);
+          pushProgress(job, `💳 크레딧 ${cost} 차감 — 남은 크레딧: ${newBalance}`);
         } catch (e) {
           console.error(
-            `[BILLING] credit deduction FAILED (uncharged report) userId=${job.userInfo.id} jobId=${job.id} field=${pipeline.creditField} priceUsd=${price} :: ${e.message}`,
+            `[BILLING] credit deduction FAILED (uncharged report) userId=${job.userInfo.id} jobId=${job.id} model=${job.model} cost=${cost} :: ${e.message}`,
           );
           pushProgress(
             job,
@@ -1575,33 +1588,21 @@ app.delete("/api/admin/users/:id", requireAdmin, async (req, res) => {
   }
 });
 
-// 종류별 잔액 충전 (admin만)
-// body: { field: "pre"|"result", count?: N, usd?: X }
-//   - count 우선: count × 단가만큼 USD 추가
-//   - usd: 직접 USD 액수 추가
+// 크레딧 충전 (admin만). 통합 정수 크레딧.
+// body: { credits: N }  (하위호환: { count: N }도 크레딧 수로 받음)
 app.post("/api/admin/users/:id/topup", requireAdmin, async (req, res) => {
   if (!supa.isEnabled())
     return res.status(503).json({ error: "Supabase 미설정" });
-  const { field, count, usd } = req.body || {};
-  if (field !== "pre" && field !== "result") {
-    return res.status(400).json({ error: "field는 'pre' 또는 'result'여야 합니다." });
-  }
-  let addUsd = 0;
-  if (count != null) {
-    const reportType = field === "pre" ? "chem-pre" : "chem-result";
-    const price = pricing.getReportPrice(reportType);
-    addUsd = Number(count) * price;
-  } else if (usd != null) {
-    addUsd = Number(usd);
-  } else {
-    return res.status(400).json({ error: "count 또는 usd 중 하나 필수" });
-  }
-  if (!Number.isFinite(addUsd) || addUsd <= 0) {
-    return res.status(400).json({ error: "충전 금액이 유효하지 않습니다." });
+  const { credits, count } = req.body || {};
+  let add = null;
+  if (credits != null) add = Math.trunc(Number(credits));
+  else if (count != null) add = Math.trunc(Number(count)); // 하위호환: count = 크레딧 수
+  if (add == null || !Number.isFinite(add) || add <= 0) {
+    return res.status(400).json({ error: "credits(양의 정수) 필수" });
   }
   try {
-    const result = await supa.topupCredit(req.params.id, field, addUsd);
-    res.json({ ok: true, addedUsd: addUsd, ...result });
+    const result = await supa.addCredits(req.params.id, add);
+    res.json({ ok: true, addedCredits: add, ...result });
   } catch (e) {
     console.error("[admin]", req.method, req.path, "error:", e);
     res.status(500).json({ error: "처리 중 오류가 발생했습니다." });
@@ -1612,20 +1613,18 @@ app.post("/api/admin/users/:id/topup", requireAdmin, async (req, res) => {
 app.get("/api/me/balance", requireAuth, async (req, res) => {
   const u = getSessionUser(req);
   if (u.isAdmin) {
-    return res.json({ isAdmin: true });
+    return res.json({ isAdmin: true, modelCredits: pricing.MODEL_CREDITS });
   }
   if (!supa.isEnabled() || !u.id) {
-    return res.json({ preUsd: 0, resultUsd: 0, krwPerUsd: 1400 });
+    return res.json({ credits: 0, modelCredits: pricing.MODEL_CREDITS });
   }
   try {
     const user = await supa.findUserById(u.id);
-    const rate = await getKrwPerUsd();
     res.json({
-      preUsd: Number(user?.pre_credits_usd) || 0,
-      resultUsd: Number(user?.result_credits_usd) || 0,
-      krwPerUsd: rate,
-      preUnitUsd: pricing.getReportPrice("chem-pre"),
-      resultUnitUsd: pricing.getReportPrice("chem-result"),
+      credits: Math.max(0, Math.trunc(Number(user?.credits) || 0)),
+      unlimited: !!user?.unlimited,
+      restrictedModel: user?.restricted_model || null,
+      modelCredits: pricing.MODEL_CREDITS,
     });
   } catch (e) {
     console.error("[me/balance] error:", e);

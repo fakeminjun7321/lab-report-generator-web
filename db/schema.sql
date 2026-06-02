@@ -11,6 +11,11 @@ create table if not exists users (
   spent_usd numeric(10, 4) not null default 0,
   pre_credits_usd numeric(10, 4) not null default 0,
   result_credits_usd numeric(10, 4) not null default 0,
+  -- 통합 크레딧 포인트제 (모델별 과금: Opus 3 / Sonnet 1). 위 *_usd는 레거시(보존).
+  credits integer not null default 0,
+  -- 특수 계정: unlimited=차감 없이 무제한, restricted_model=해당 모델만 사용 가능(null=제한 없음)
+  unlimited boolean not null default false,
+  restricted_model text,
   is_admin boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
