@@ -1774,4 +1774,21 @@ app.listen(PORT, async () => {
     }, 6 * 60 * 60 * 1000);
     if (typeof cleanupTimer.unref === "function") cleanupTimer.unref();
   }
+
+  // ── 자가 핑(self-ping): Render 무료 인스턴스가 15분 무활동 시 잠드는 것을 방지.
+  // 서버가 자기 public URL(/api/keepalive)을 주기적으로 호출 → 인바운드 트래픽 발생 →
+  // Render idle 타이머가 리셋되어 잠들지 않는다. (GitHub Actions cron은 고빈도 스케줄을
+  // 심하게 throttle해서 못 쓴다 — 자가 핑은 프로세스가 살아있는 한 정확히 동작.)
+  // RENDER_EXTERNAL_URL은 Render가 자동 주입. 다른 호스트면 SELF_PING_URL로 지정.
+  const SELF_URL = process.env.RENDER_EXTERNAL_URL || process.env.SELF_PING_URL;
+  if (SELF_URL && process.env.DISABLE_SELF_PING !== "1") {
+    const pingUrl = SELF_URL.replace(/\/+$/, "") + "/api/keepalive";
+    const selfPingTimer = setInterval(() => {
+      fetch(pingUrl).catch(() => {});
+    }, 5 * 60 * 1000); // 5분마다 (Render 15분 한계보다 충분히 짧게, 1회 실패에도 여유)
+    if (typeof selfPingTimer.unref === "function") selfPingTimer.unref();
+    console.log(`  ✓ self-ping 활성화: ${pingUrl} (5분 간격)`);
+  } else {
+    console.log("  · self-ping 비활성 (RENDER_EXTERNAL_URL 없음 또는 DISABLE_SELF_PING=1)");
+  }
 });
