@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PDF 자르기 — 보고서 도구</title>
+    <meta name="description" content="PDF의 상하좌우 여백을 잘라내는 브라우저 도구. 업로드 없이 기기 안에서 처리." />
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("theme");
+          if (!t) t = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+          document.documentElement.setAttribute("data-theme", t);
+          if (new URLSearchParams(location.search).has("embed"))
+            document.documentElement.classList.add("embed");
+        } catch (e) {}
+      })();
+    </script>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body class="landing">
+    <div class="landing-bg" aria-hidden="true"></div>
+    <nav class="landing-nav">
+      <div class="landing-nav-inner">
+        <a href="/" class="brand"><span class="brand-mark" aria-hidden="true">Q</span> Quilo</a>
+        <div class="landing-nav-actions">
+          <a href="/tools/index.html" class="nav-link">← 도구 모음</a>
+          <button type="button" id="themeToggle" class="theme-toggle" aria-label="다크 모드로 전환" title="다크 모드로 전환">
+            <span class="theme-icon-light" aria-hidden="true">🌙</span>
+            <span class="theme-icon-dark" aria-hidden="true">☀️</span>
+          </button>
+        </div>
+      </div>
+    </nav>
+
+    <main class="landing-shell">
+      <section class="section" style="border-top:0">
+        <div class="tool-page-head">
+          <h1>PDF 자르기</h1>
+          <p>여백을 잘라냅니다. 상하좌우 여백을 입력하면 모든 쪽에 같은 크기로 적용됩니다. 모든 처리는 브라우저 안에서만 이뤄지고 파일은 서버로 전송되지 않습니다.</p>
+        </div>
+
+        <div class="tool-card">
+          <div id="pcDrop" role="button" tabindex="0" style="border:2px dashed var(--border-strong);border-radius:12px;padding:30px 20px;text-align:center;cursor:pointer;color:var(--text-muted)">
+            <div style="font-weight:650;color:var(--text)">PDF 파일을 끌어다 놓기</div>
+            <div style="font-size:13px;margin-top:4px">또는 클릭해서 선택 · 1개</div>
+          </div>
+          <input type="file" id="pcFile" accept="application/pdf,.pdf" style="display:none" />
+
+          <div id="pcInfo" class="hint" style="margin:0;display:none"></div>
+
+          <div id="pcControls" style="display:none">
+            <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end">
+              <div style="flex:1;min-width:120px">
+                <label class="tool-label" for="pcTop">위 여백</label>
+                <input type="number" id="pcTop" class="tool-input" value="0" min="0" step="1" inputmode="decimal" />
+              </div>
+              <div style="flex:1;min-width:120px">
+                <label class="tool-label" for="pcBottom">아래 여백</label>
+                <input type="number" id="pcBottom" class="tool-input" value="0" min="0" step="1" inputmode="decimal" />
+              </div>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;margin-top:12px">
+              <div style="flex:1;min-width:120px">
+                <label class="tool-label" for="pcLeft">왼쪽 여백</label>
+                <input type="number" id="pcLeft" class="tool-input" value="0" min="0" step="1" inputmode="decimal" />
+              </div>
+              <div style="flex:1;min-width:120px">
+                <label class="tool-label" for="pcRight">오른쪽 여백</label>
+                <input type="number" id="pcRight" class="tool-input" value="0" min="0" step="1" inputmode="decimal" />
+              </div>
+              <div style="flex:0 0 auto">
+                <label class="tool-label" for="pcUnit">단위</label>
+                <select id="pcUnit" class="tool-input" style="min-width:90px">
+                  <option value="mm">mm</option>
+                  <option value="pct">%</option>
+                </select>
+              </div>
+            </div>
+            <p class="hint" style="margin:10px 0 0">여백은 각 변에서 안쪽으로 잘라낼 양입니다. %는 해당 변의 너비/높이 기준입니다.</p>
+          </div>
+
+          <div class="actions">
+            <button class="btn-primary" id="pcCrop" disabled>여백 자르기</button>
+            <button class="btn-ghost" id="pcClear">비우기</button>
+          </div>
+          <div id="pcOut" class="tool-result" style="display:none">
+            <div class="badge ok" id="pcStat" style="display:inline-flex;align-items:center;gap:7px;padding:10px 14px;border-radius:11px;background:var(--accent-soft);color:var(--accent-text);font-weight:600;font-size:14px"></div>
+            <a id="pcDl" class="btn-lg btn-primary" style="display:inline-flex;min-height:44px;justify-self:start" download>↓ 자른 PDF 내려받기</a>
+          </div>
+          <p class="hint" id="pcMsg" style="margin:0"></p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-links">
+        <a href="/">메인</a>
+        <a href="/tools/index.html">도구 모음</a>
+        <a href="/guide.html">이용 가이드</a>
+        <a href="https://blog.naver.com/physicjun1905" target="_blank" rel="noopener">블로그</a>
+      </div>
+      <div class="footer-copy">© 2026 Quilo · MIT License · PDF: pdf-lib (MIT)</div>
+    </footer>
+
+    <script src="/tools/vendor/pdf-lib.min.js"></script>
+    <script src="/theme.js"></script>
+    <script>
+      (function () {
+        var MM_PER_PT = 25.4 / 72; // 1pt = 0.3528mm
+        var drop = document.getElementById("pcDrop"), input = document.getElementById("pcFile");
+        var info = document.getElementById("pcInfo"), controls = document.getElementById("pcControls");
+        var cropBtn = document.getElementById("pcCrop"), clearBtn = document.getElementById("pcClear");
+        var out = document.getElementById("pcOut"), msg = document.getElementById("pcMsg");
+        var unitSel = document.getElementById("pcUnit");
+        var inTop = document.getElementById("pcTop"), inBottom = document.getElementById("pcBottom"), inLeft = document.getElementById("pcLeft"), inRight = document.getElementById("pcRight");
+        var file = null, lastUrl = null;
+
+        function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+        function fmt(b) { return b < 1024 ? b + " B" : b < 1048576 ? (b / 1024).toFixed(0) + " KB" : (b / 1048576).toFixed(1) + " MB"; }
+        function ptToMm(pt) { return pt * MM_PER_PT; }
+        function num(el) { var v = parseFloat(el.value); return isFinite(v) && v > 0 ? v : 0; }
+
+        function reset() {
+          file = null; out.style.display = "none"; msg.textContent = "";
+          info.style.display = "none"; controls.style.display = "none";
+          cropBtn.disabled = true;
+          drop.querySelector("div").textContent = "PDF 파일을 끌어다 놓기";
+        }
+
+        function showInfo() {
+          if (!file || !window.PDFLib) return;
+          info.textContent = "분석 중…"; info.style.display = "block";
+          (async function () {
+            try {
+              var bytes = await file.arrayBuffer();
+              var doc = await PDFLib.PDFDocument.load(bytes, { ignoreEncryption: true });
+              var pages = doc.getPages();
+              var p0 = pages[0];
+              var mb = p0.getMediaBox();
+              var wMm = ptToMm(mb.width).toFixed(0), hMm = ptToMm(mb.height).toFixed(0);
+              info.innerHTML = "선택: <strong>" + esc(file.name) + "</strong> · " + fmt(file.size) +
+                " · " + pages.length + "쪽 · 첫 쪽 크기 <strong>" + wMm + " × " + hMm + " mm</strong> (" +
+                mb.width.toFixed(0) + " × " + mb.height.toFixed(0) + " pt)";
+              controls.style.display = "block";
+              cropBtn.disabled = false;
+            } catch (e) {
+              info.innerHTML = '<span class="error">PDF를 읽지 못했습니다: ' + esc(e.message || "알 수 없는 오류") + " (암호가 걸린 PDF는 처리할 수 없습니다)</span>";
+              cropBtn.disabled = true;
+            }
+          })();
+        }
+
+        function setFile(f) {
+          if (!f) return;
+          if (!(/\.pdf$/i.test(f.name) || f.type === "application/pdf")) {
+            reset(); msg.innerHTML = '<span class="error">PDF 파일만 선택할 수 있습니다.</span>'; return;
+          }
+          reset(); file = f;
+          drop.querySelector("div").textContent = "✓ " + f.name;
+          showInfo();
+        }
+
+        drop.addEventListener("click", function () { input.click(); });
+        drop.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); input.click(); } });
+        input.addEventListener("change", function () { setFile(input.files[0]); input.value = ""; });
+        ["dragover", "dragenter"].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.style.borderColor = "var(--accent)"; }); });
+        ["dragleave", "drop"].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.style.borderColor = "var(--border-strong)"; }); });
+        drop.addEventListener("drop", function (e) { if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) setFile(e.dataTransfer.files[0]); });
+        clearBtn.addEventListener("click", function () { reset(); });
+
+        cropBtn.addEventListener("click", function () {
+          if (!file || !window.PDFLib) { msg.innerHTML = !window.PDFLib ? '<span class="error">PDF 라이브러리를 불러오지 못했습니다.</span>' : ""; return; }
+          var unit = unitSel.value;
+          var mT = num(inTop), mB = num(inBottom), mL = num(inLeft), mR = num(inRight);
+          if (mT === 0 && mB === 0 && mL === 0 && mR === 0) {
+            msg.innerHTML = '<span class="error">잘라낼 여백을 하나 이상 입력하세요.</span>'; return;
+          }
+          cropBtn.disabled = true; cropBtn.textContent = "자르는 중…"; msg.textContent = "";
+          (async function () {
+            try {
+              var bytes = await file.arrayBuffer();
+              var doc = await PDFLib.PDFDocument.load(bytes, { ignoreEncryption: true });
+              var pages = doc.getPages();
+              var skipped = 0;
+              for (var i = 0; i < pages.length; i++) {
+                var pg = pages[i];
+                var mb = pg.getMediaBox(); // {x, y, width, height} in pt
+                // Compute crop amounts in points for this page.
+                var cTop, cBottom, cLeft, cRight;
+                if (unit === "pct") {
+                  cTop = (mT / 100) * mb.height;
+                  cBottom = (mB / 100) * mb.height;
+                  cLeft = (mL / 100) * mb.width;
+                  cRight = (mR / 100) * mb.width;
+                } else { // mm -> pt
+                  cTop = mT / MM_PER_PT;
+                  cBottom = mB / MM_PER_PT;
+                  cLeft = mL / MM_PER_PT;
+                  cRight = mR / MM_PER_PT;
+                }
+                var newW = mb.width - cLeft - cRight;
+                var newH = mb.height - cTop - cBottom;
+                if (newW <= 1 || newH <= 1) { skipped++; continue; } // would crop everything away
+                // PDF y-axis points up: left/bottom origin shifts by cLeft / cBottom; top trimmed via height.
+                var newX = mb.x + cLeft;
+                var newY = mb.y + cBottom;
+                pg.setCropBox(newX, newY, newW, newH);
+              }
+              if (skipped === pages.length) {
+                throw new Error("여백이 페이지 크기보다 큽니다. 값을 줄여 주세요.");
+              }
+              var outBytes = await doc.save();
+              if (lastUrl) URL.revokeObjectURL(lastUrl);
+              lastUrl = URL.createObjectURL(new Blob([outBytes], { type: "application/pdf" }));
+              var statTxt = "✓ " + (pages.length - skipped) + "쪽 자르기 완료";
+              if (skipped > 0) statTxt += " · " + skipped + "쪽은 여백이 너무 커 건너뜀";
+              document.getElementById("pcStat").textContent = statTxt;
+              var base = file.name.replace(/\.pdf$/i, "");
+              var dl = document.getElementById("pcDl"); dl.href = lastUrl; dl.download = base + "-자름.pdf";
+              out.style.display = "grid";
+              msg.textContent = "";
+            } catch (e) {
+              msg.innerHTML = '<span class="error">자르기 실패: ' + esc(e.message || "알 수 없는 오류") + "</span>";
+            } finally {
+              cropBtn.disabled = false; cropBtn.textContent = "여백 자르기";
+            }
+          })();
+        });
+      })();
+    </script>
+  </body>
+</html>

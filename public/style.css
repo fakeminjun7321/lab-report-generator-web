@@ -1,5 +1,5 @@
 /* ============================================================
-   보고서 작성 툴 — 디자인 시스템 (modern, light/dark)
+   Quilo — 디자인 시스템 (modern, light/dark)
    - 색은 전부 토큰. 다크는 html[data-theme="dark"]에서 오버라이드.
    - 기존 클래스명은 그대로 유지(인라인 JS 의존). 레거시 토큰은 별칭으로 보존.
    ============================================================ */
@@ -115,12 +115,33 @@ html[data-theme="dark"] {
 html {
   min-height: 100%;
   background: var(--bg);
+  scroll-behavior: smooth;
+}
+/* 스티키 상단바(66px) 아래로 가리지 않게 앵커 스크롤 여백 */
+#features,
+#how,
+#reportTypes {
+  scroll-margin-top: 84px;
+}
+/* 임베드 모드(?embed=1): 파일 변환기 탭 안 iframe 으로 쓸 때 자체 헤더/푸터를 숨긴다.
+   .landing 계열 도구(이미지·PDF병합) + equation 페이지의 자체 chrome 모두 커버. */
+html.embed .landing-nav,
+html.embed .landing-bg,
+html.embed .site-footer,
+html.embed .site-topbar,
+html.embed footer {
+  display: none !important;
+}
+html.embed body,
+html.embed .landing-shell,
+html.embed .wrap {
+  padding-top: 10px !important;
 }
 
 body {
-  width: min(1080px, calc(100% - 32px));
+  width: min(1180px, calc(100% - 40px));
   margin: 0 auto;
-  padding: 28px 0 56px;
+  padding: 24px 0 56px;
   font-family: var(--font-sans);
   color: var(--text);
   background: var(--bg);
@@ -1778,7 +1799,8 @@ body.landing {
   letter-spacing: -0.03em;
 }
 
-.hero h1 .grad {
+.hero h1 .grad,
+.home-hero h1 .grad {
   background: linear-gradient(100deg, var(--accent), #8b5cf6 70%);
   -webkit-background-clip: text;
   background-clip: text;
@@ -2322,4 +2344,261 @@ textarea.tool-input {
   background: var(--surface-2);
   color: var(--text-faint);
   text-align: right;
+}
+
+/* ── 상단 드롭다운 네비 (CANSAT식) ─────────────────────────────────── */
+.topnav {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  /* 좁은 본문 컬럼 밖으로 빠져나가 화면 끝까지 가는 풀폭 바(답답함 해소, SNU식) */
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-bottom: 18px;
+}
+.topnav-inner {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 32px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 66px;
+}
+.topnav .brand {
+  margin-right: 36px;
+}
+.topnav-menu {
+  display: flex;
+  align-items: center;
+  gap: 34px;
+  flex: 1;
+}
+/* 계정 + 테마 토글은 오른쪽 끝으로 (가운데 항목들은 넓게 펼쳐짐) */
+.nav-dd.nav-dd-right {
+  margin-left: auto;
+}
+.nav-dd {
+  position: relative;
+}
+.nav-dd-btn {
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 15.5px;
+  font-weight: 600;
+  color: var(--text);
+  padding: 9px 10px;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.nav-dd-btn:hover,
+.nav-dd.open .nav-dd-btn {
+  background: var(--surface-2);
+  color: var(--accent-text);
+}
+.nav-dd .caret {
+  font-size: 10px;
+  opacity: 0.6;
+  transition: transform 0.15s var(--tap);
+}
+.nav-dd.open .caret {
+  transform: rotate(180deg);
+}
+.nav-dd-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  min-width: 240px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  padding: 8px;
+  display: none;
+  flex-direction: column;
+}
+.nav-dd-right .nav-dd-menu {
+  left: auto;
+  right: 0;
+}
+.nav-dd.open .nav-dd-menu {
+  display: flex;
+}
+.nav-dd-menu a {
+  padding: 11px 14px;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  text-decoration: none;
+  font-size: 14.5px;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.nav-dd-menu a:hover {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+/* hidden 속성이 위 display:flex 에 지지 않도록 (베타 링크는 테스터에게만 노출) */
+.nav-dd-menu a[hidden] {
+  display: none;
+}
+.nav-dd-menu .dd-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 5px 4px;
+}
+.beta-pill {
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--accent);
+  color: var(--on-accent);
+  border-radius: 999px;
+  padding: 1px 7px;
+  margin-left: auto;
+}
+/* 로그인 드롭다운(폼) */
+.nav-login-menu {
+  min-width: 320px;
+  padding: 18px;
+}
+.nav-login-menu .field {
+  margin: 0 0 10px;
+}
+.nav-login-menu .field-label {
+  font-size: 13px;
+  display: block;
+  margin-bottom: 4px;
+}
+.nav-login-menu input[type="text"],
+.nav-login-menu input[type="password"],
+.nav-login-menu input:not([type]) {
+  width: 100%;
+}
+.nav-login-menu .check-line {
+  font-size: 12.5px;
+  margin: 6px 0;
+}
+.nav-login-menu .btn {
+  width: 100%;
+}
+.topnav-burger {
+  display: none;
+  background: none;
+  border: 0;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--text);
+  margin-left: auto;
+  padding: 6px 10px;
+}
+.slim-disclaimer {
+  max-width: 1100px;
+  margin: 12px auto 0;
+  padding: 8px 18px;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+.slim-disclaimer strong {
+  color: var(--text);
+}
+/* 홈 히어로 (홍보용 첫 화면) */
+.home-hero {
+  text-align: center;
+  padding: clamp(40px, 6vw, 72px) 20px clamp(28px, 4vw, 48px);
+  margin-bottom: 10px;
+  border-radius: var(--radius-lg);
+  background: radial-gradient(
+    1100px 420px at 50% -25%,
+    var(--accent-soft),
+    transparent 72%
+  );
+}
+.home-hero h1 {
+  font-size: clamp(31px, 5.6vw, 56px);
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+  margin: 16px 0 0;
+}
+.home-hero-sub {
+  max-width: 680px;
+  margin: 18px auto 0;
+  color: var(--text-muted);
+  font-size: clamp(14px, 1.6vw, 17px);
+  line-height: 1.7;
+}
+.home-hero-cta {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 28px;
+}
+.home-hero-points {
+  list-style: none;
+  padding: 0;
+  margin: 30px auto 0;
+  display: flex;
+  gap: 10px 22px;
+  justify-content: center;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.home-hero-points li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.home-hero-points li::before {
+  content: "✓";
+  color: var(--success);
+  font-weight: 800;
+}
+/* 드롭다운은 클릭으로만 연다(호버 자동 열림 없음) — SNU식, 의도치 않은 열림 방지 */
+@media (max-width: 760px) {
+  .topnav-burger {
+    display: inline-block;
+  }
+  .topnav-menu {
+    display: none;
+    position: absolute;
+    top: 60px;
+    left: 0;
+    right: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    margin: 0;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    padding: 8px;
+  }
+  .topnav-menu.open {
+    display: flex;
+  }
+  .nav-dd-menu {
+    position: static;
+    box-shadow: none;
+    border: 0;
+    padding: 0 0 6px 14px;
+    min-width: 0;
+  }
+  .nav-dd-right .nav-dd-menu {
+    right: auto;
+  }
+  .topnav-menu .theme-toggle {
+    align-self: flex-start;
+    margin: 6px;
+  }
 }

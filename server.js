@@ -194,6 +194,19 @@ const {
   sendFeedbackEmail,
 } = require("./lib/feedback-mailer");
 const { getVersionInfo } = require("./lib/version-info");
+const { translatePdf } = require("./lib/pipelines/pdf-translate/translate");
+const { retypesetPdf } = require("./lib/pipelines/pdf-translate/latex-gen");
+const {
+  analyzePdf,
+  rasterizePages,
+  splitPdf,
+} = require("./lib/pipelines/pdf-translate/pdf-tool");
+const {
+  prepareImageForAnthropic,
+  toAnthropicImageBlock,
+} = require("./lib/anthropic-media");
+const fs = require("fs");
+const os = require("os");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -205,6 +218,12 @@ const SESSION_SECRET =
 // Hard timeout for a single generation job (default 8 minutes)
 const JOB_TIMEOUT_MS = parseInt(
   process.env.JOB_TIMEOUT_MS || String(8 * 60 * 1000),
+  10,
+);
+// PDF 통번역은 페이지 수에 비례해 오래 걸릴 수 있어(다묶음 번역+레이아웃 삽입)
+// 별도의 넉넉한 타임아웃을 둔다. 비동기 job+SSE라 HTTP 요청 길이 제한과 무관.
+const PDF_TRANSLATE_TIMEOUT_MS = parseInt(
+  process.env.PDF_TRANSLATE_TIMEOUT_MS || String(20 * 60 * 1000),
   10,
 );
 
@@ -228,6 +247,26 @@ app.use(
     },
   }),
 );
+
+// DEV 전용: 로컬에서 Supabase 없이 UI 를 점검하기 위한 가짜 관리자 세션.
+// DEV_FAKE_AUTH=1 + 비-production 일 때만 동작. (Render 는 NODE_ENV=production 이라
+// 혹시 환경변수가 새어도 무력화된다 — 이중 안전장치.)
+if (
+  process.env.DEV_FAKE_AUTH === "1" &&
+  process.env.NODE_ENV !== "production"
+) {
+  console.warn("⚠ DEV_FAKE_AUTH 활성 — 가짜 관리자 세션. 프로덕션에서 쓰면 안 됨.");
+  app.use((req, res, next) => {
+    if (req.session && !req.session.userInfo) {
+      req.session.userInfo = {
+        id: "dev-admin",
+        name: "개발관리자",
+        isAdmin: true,
+      };
+    }
+    next();
+  });
+}
 
 app.use((req, res, next) => {
   if (!SITE_CLOSED) return next();
@@ -277,7 +316,7 @@ app.use((req, res, next) => {
 <body>
   <main>
     <h1>사이트가 폐쇄되었습니다</h1>
-    <p>보고서 작성 툴 서비스를 닫았습니다.</p>
+    <p>Quilo 서비스를 닫았습니다.</p>
   </main>
 </body>
 </html>`);
@@ -313,6 +352,51 @@ function requireAdmin(req, res, next) {
   if (!u) return res.status(401).json({ error: "로그인이 필요합니다." });
   if (!u.isAdmin) return res.status(403).json({ error: "관리자만 접근 가능합니다." });
   next();
+}
+
+// 베타 기능 게이트: 관리자이거나, 해당 베타가 enabled 이고 테스터로 지정된 사용자만 통과.
+// 베타 기능 일일 사용 한도 (per-feature). rate-limit과 동일하게 메모리 보관 → 재시작 시 리셋.
+// 값 = 테스터 1인당 하루 허용 횟수. 0 이하 = 무제한. 기본값 BETA_DAILY_LIMIT(기본 15).
+const BETA_DAILY_LIMIT_DEFAULT = Math.max(
+  0,
+  Number(process.env.BETA_DAILY_LIMIT) || 15,
+);
+const betaDailyLimits = new Map(); // featureKey -> limit(int)
+function getBetaDailyLimit(key) {
+  return betaDailyLimits.has(key)
+    ? betaDailyLimits.get(key)
+    : BETA_DAILY_LIMIT_DEFAULT;
+}
+
+function requireBeta(key) {
+  return async (req, res, next) => {
+    const u = getSessionUser(req);
+    if (!u) return res.status(401).json({ error: "로그인이 필요합니다." });
+    if (u.isAdmin) return next(); // 관리자는 접근·한도 모두 면제
+    try {
+      if (supa.isEnabled() && u.id && (await supa.userHasBeta(u.id, key))) {
+        // 접근 OK → 테스터 일일 사용 한도 확인
+        const chk = rateLimit.checkBetaUsageLimit(
+          u.id,
+          key,
+          getBetaDailyLimit(key),
+        );
+        if (!chk.allowed) {
+          return res.status(429).json({
+            error: `오늘 베타 사용 한도(${chk.limit}회)를 모두 사용했습니다. 내일 다시 이용해 주세요.`,
+            limit: chk.limit,
+            used: chk.count,
+          });
+        }
+        return next();
+      }
+    } catch {
+      /* 테이블 없음/조회 오류 → 차단(아래 403) */
+    }
+    return res
+      .status(403)
+      .json({ error: "이 기능은 현재 베타 테스터에게만 열려 있습니다." });
+  };
 }
 
 function isTruthyPolicyFlag(value) {
@@ -483,6 +567,8 @@ app.post("/api/login", async (req, res) => {
       name: user.name,
       studentId: normalizeStudentId(user.student_id),
       isAdmin: !!user.is_admin,
+      unlimited: !!user.unlimited,
+      restrictedModel: user.restricted_model || null,
     };
     console.log(`[login] ${user.name} (admin=${user.is_admin})`);
     return res.json({
@@ -558,6 +644,8 @@ app.post("/api/signup", async (req, res) => {
       name: user.name,
       studentId: normalizeStudentId(user.student_id),
       isAdmin: false,
+      unlimited: false,
+      restrictedModel: null,
     };
     console.log(`[signup] ${user.name}`);
     return res.json({ ok: true, user: user.name, isAdmin: false });
@@ -586,18 +674,28 @@ app.get("/api/me", async (req, res) => {
   }
 
   let studentId = normalizeStudentId(u.studentId);
+  let blockedReportTypes = [];
   if (supa.isEnabled() && u.id) {
     try {
       const freshUser = await supa.findUserById(u.id);
       if (freshUser) {
         studentId = normalizeStudentId(freshUser.student_id);
         req.session.userInfo.studentId = studentId;
+        // 기존 freshUser 조회 재사용 — 추가 쿼리 없이 차단 목록도 같이 반영
+        blockedReportTypes = supa.normalizeBlockedTypes
+          ? supa.normalizeBlockedTypes(freshUser.blocked_report_types)
+          : [];
       }
     } catch (e) {
       console.warn("[me] profile lookup failed:", e.message);
     }
   }
-  return res.json({ user: u.name, isAdmin: !!u.isAdmin, studentId });
+  return res.json({
+    user: u.name,
+    isAdmin: !!u.isAdmin,
+    studentId,
+    blockedReportTypes,
+  });
 });
 
 app.patch("/api/me/profile", requireAuth, async (req, res) => {
@@ -819,6 +917,22 @@ app.post(
     }
 
     const userInfo = getSessionUser(req);
+
+    // 보고서 종류 접근 제한 (관리자 면제). DB 컬럼 없으면/조회 실패 시 fail-open.
+    if (userInfo.id && !userInfo.isAdmin) {
+      try {
+        const blocked = await supa.getBlockedReportTypes(userInfo.id);
+        if (blocked.includes(reportType)) {
+          return res.status(403).json({
+            error:
+              "이 계정은 해당 보고서 종류의 생성 권한이 없습니다. 관리자에게 문의하세요.",
+          });
+        }
+      } catch {
+        /* 제한 정보 조회 실패 → 차단하지 않음(기존 동작 보존) */
+      }
+    }
+
     const postedStudentId = normalizeStudentId(req.body.studentId);
     let savedStudentId = normalizeStudentId(userInfo.studentId);
     if (supa.isEnabled() && userInfo.id) {
@@ -853,20 +967,37 @@ app.post(
       }
     }
 
-    // 종류별 잔액 검증 (Supabase enabled + 일반 사용자)
-    // 사전 보고서는 pre_credits_usd, 결과 보고서는 result_credits_usd 사용
-    const reportPrice = pricing.getReportPrice(reportType);
-    if (supa.isEnabled() && userInfo.id && !userInfo.isAdmin) {
+    // ── 모델 결정 (통합 크레딧 포인트제: 모델별 과금 Opus 3 / Sonnet 1) ──────────
+    // 화이트리스트 검증으로 임의 모델 주입 차단. 기본 Opus 4.8.
+    const ALLOWED_MODELS = [
+      "claude-opus-4-8",
+      "claude-opus-4-7",
+      "claude-sonnet-4-6",
+    ];
+    const requestedModel = String(req.body.model || "").trim();
+    let model = ALLOWED_MODELS.includes(requestedModel) ? requestedModel : null;
+    // 모델 제한 계정(예: 베타테스터)은 허용 모델로 강제
+    if (userInfo.restrictedModel) {
+      model = ALLOWED_MODELS.includes(userInfo.restrictedModel)
+        ? userInfo.restrictedModel
+        : "claude-sonnet-4-6";
+    }
+    if (!model) model = "claude-opus-4-8"; // 기본 = Opus 4.8
+    const creditCost = pricing.getModelCredits(model);
+
+    // 크레딧 검증 (Supabase + 일반 사용자. admin·무제한 계정은 제외)
+    if (
+      supa.isEnabled() &&
+      userInfo.id &&
+      !userInfo.isAdmin &&
+      !userInfo.unlimited
+    ) {
       try {
-        const check = await supa.checkCreditBalance(
-          userInfo.id,
-          pipeline.creditField,
-          reportPrice,
-        );
-        if (!check.ok) {
-          return res
-            .status(402)
-            .json({ error: "🚫 " + (check.reason || "잔액 부족") });
+        const have = await supa.getCredits(userInfo.id);
+        if (have < creditCost) {
+          return res.status(402).json({
+            error: `🚫 크레딧 부족 (보유 ${have} / 필요 ${creditCost}). 관리자에게 충전을 요청하세요.`,
+          });
         }
       } catch (e) {
         console.error("[credit] error:", e);
@@ -895,11 +1026,7 @@ app.post(
           filesByField.data?.[0]
         : filesByField[pipeline.filenameSourceField]?.[0];
     const sourceFilename = sourceFile?.originalname || "";
-    // 사용자가 폼에서 선택한 모델. 화이트리스트 검증으로 임의 모델 주입 차단.
-    // Opus 4.8 기본(품질 우선). 4.7도 하위호환으로 허용. Sonnet도 쓰려면 "claude-sonnet-4-6" 추가.
-    const ALLOWED_MODELS = ["claude-opus-4-8", "claude-opus-4-7"];
-    const requestedModel = String(req.body.model || "").trim();
-    const model = ALLOWED_MODELS.includes(requestedModel) ? requestedModel : null;
+    // 모델·크레딧 단가(model, creditCost)는 위 잔액 검증 단계에서 이미 결정됨.
 
     // 모든 검증 통과 — 일반 사용자는 rate limit 카운트 증가
     if (!userInfo.isAdmin && userInfo.id) {
@@ -925,6 +1052,8 @@ app.post(
 
     const job = createJob(userInfo);
     job.reportType = reportType;
+    job.model = model;
+    job.creditCost = creditCost;
     if (userInfo.id) {
       activeJobByUser.set(userInfo.id, job.id);
     }
@@ -952,6 +1081,502 @@ app.post(
   },
 );
 
+// ── 베타 기능 (관리자 관리 + 사용자 노출 조회) ───────────────────────────────
+// 현재 사용자가 접근 가능한 베타 기능 key 목록(메뉴 노출용). 관리자는 enabled 전부.
+app.get("/api/me/beta", requireAuth, async (req, res) => {
+  const u = getSessionUser(req);
+  if (!supa.isEnabled()) return res.json({ features: [] });
+  try {
+    if (u.isAdmin) {
+      const all = await supa.listBetaFeatures();
+      return res.json({
+        features: all.filter((f) => f.enabled).map((f) => f.key),
+        admin: true, // 관리자는 한도 면제
+      });
+    }
+    const keys = await supa.getUserBetaFeatures(u.id);
+    const usage = keys.map((k) => {
+      const lim = getBetaDailyLimit(k);
+      return {
+        key: k,
+        limit: lim, // 0 = 무제한
+        used: rateLimit.getBetaUsageCount(u.id, k),
+      };
+    });
+    return res.json({ features: keys, usage });
+  } catch {
+    return res.json({ features: [] });
+  }
+});
+
+app.get("/api/admin/beta", requireAdmin, async (req, res) => {
+  if (!supa.isEnabled())
+    return res.status(503).json({ error: "Supabase 미설정" });
+  try {
+    const features = await supa.listBetaFeatures();
+    res.json({
+      features: features.map((f) => ({
+        ...f,
+        dailyLimit: getBetaDailyLimit(f.key),
+      })),
+      defaultDailyLimit: BETA_DAILY_LIMIT_DEFAULT,
+    });
+  } catch (e) {
+    res
+      .status(e.code === "BETA_TABLE_MISSING" ? 409 : 500)
+      .json({ error: e.message });
+  }
+});
+
+app.post("/api/admin/beta", requireAdmin, async (req, res) => {
+  if (!supa.isEnabled())
+    return res.status(503).json({ error: "Supabase 미설정" });
+  const key = String(req.body.key || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, "");
+  const label = String(req.body.label || "").trim();
+  if (!key)
+    return res.status(400).json({ error: "기능 key(영문/숫자/하이픈) 필수" });
+  try {
+    await supa.createBetaFeature(key, label || key);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.patch("/api/admin/beta/:key", requireAdmin, async (req, res) => {
+  if (!supa.isEnabled())
+    return res.status(503).json({ error: "Supabase 미설정" });
+  try {
+    if (req.body.enabled !== undefined) {
+      await supa.setBetaFeatureEnabled(req.params.key, !!req.body.enabled);
+    }
+    if (req.body.dailyLimit !== undefined) {
+      // 0 이하 = 무제한
+      const n = Math.max(0, Math.trunc(Number(req.body.dailyLimit) || 0));
+      betaDailyLimits.set(req.params.key, n);
+    }
+    res.json({ ok: true, dailyLimit: getBetaDailyLimit(req.params.key) });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete("/api/admin/beta/:key", requireAdmin, async (req, res) => {
+  if (!supa.isEnabled())
+    return res.status(503).json({ error: "Supabase 미설정" });
+  try {
+    await supa.deleteBetaFeature(req.params.key);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/api/admin/beta/:key/testers", requireAdmin, async (req, res) => {
+  if (!supa.isEnabled())
+    return res.status(503).json({ error: "Supabase 미설정" });
+  const name = String(req.body.name || "").trim();
+  if (!name) return res.status(400).json({ error: "사용자 이름 필수" });
+  try {
+    const user = await supa.findUserByName(name);
+    if (!user)
+      return res
+        .status(404)
+        .json({ error: `사용자 '${name}'를 찾을 수 없습니다.` });
+    await supa.addBetaTester(req.params.key, user.id);
+    res.json({ ok: true, tester: { id: user.id, name: user.name } });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete(
+  "/api/admin/beta/:key/testers/:userId",
+  requireAdmin,
+  async (req, res) => {
+    if (!supa.isEnabled())
+      return res.status(503).json({ error: "Supabase 미설정" });
+    try {
+      await supa.removeBetaTester(req.params.key, req.params.userId);
+      res.json({ ok: true });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  },
+);
+
+// ── PDF 통번역 (베타: 관리자 + 지정 테스터) ──────────────────────────────────
+// DeepL 식 문서 번역: 그림·레이아웃은 그대로 두고 텍스트만 한국어로 교체한다.
+// 외부로 PDF 를 보내지 않고 우리 서버에서만 처리한다 (Claude + PyMuPDF).
+// 접근 제어는 requireBeta("pdf-translate") — 관리자탭 베타 관리에서 테스터 지정.
+app.post(
+  "/api/translate-pdf",
+  requireBeta("pdf-translate"),
+  upload.single("pdf"),
+  async (req, res) => {
+    const file = req.file;
+    if (!file) {
+      return res.status(400).json({ error: "PDF 파일을 업로드하세요." });
+    }
+    // multer 가 주는 originalname 은 한글이 latin1 로 깨져 들어온다 — /api/generate
+    // 와 동일하게 정규화해야 다운로드 파일명(…_KO.pdf)이 깨지지 않는다.
+    file.originalname = normalizeUploadFilename(file.originalname);
+    if (
+      file.mimetype !== "application/pdf" &&
+      !/\.pdf$/i.test(file.originalname || "")
+    ) {
+      return res.status(400).json({ error: "PDF 파일만 업로드 가능합니다." });
+    }
+
+    const userInfo = getSessionUser(req);
+
+    // 모델 선택(관리자) — 기본은 translate.js 의 기본값(문서 번역엔 Sonnet 으로 충분).
+    const ALLOWED_MODELS = [
+      "claude-opus-4-8",
+      "claude-opus-4-7",
+      "claude-sonnet-4-6",
+    ];
+    const requested = String(req.body.model || "").trim();
+    const model = ALLOWED_MODELS.includes(requested) ? requested : null;
+
+    // 진행 중 작업 자동 중단 (generate 와 동일 정책)
+    if (userInfo.id) {
+      const prevJobId = activeJobByUser.get(userInfo.id);
+      if (prevJobId) {
+        const prevJob = jobs.get(prevJobId);
+        if (prevJob && prevJob.status === "running" && prevJob.abortController) {
+          prevJob.autoAborted = true;
+          pushProgress(prevJob, "🔄 새 작업 시작 — 이전 작업 자동 중단");
+          prevJob.abortController.abort();
+        }
+      }
+    }
+
+    const job = createJob(userInfo);
+    job.reportType = "pdf-translate";
+    if (userInfo.id) activeJobByUser.set(userInfo.id, job.id);
+    // 베타 일일 사용 기록 (테스터 한정 — 관리자는 면제). requireBeta 에서 한도 확인 완료.
+    if (userInfo.id && !userInfo.isAdmin) {
+      rateLimit.recordBetaUsage(userInfo.id, "pdf-translate");
+    }
+
+    res.json({ jobId: job.id });
+
+    // auto(기본) / inplace / retypeset 그대로 전달 — runPdfTranslation 이 auto 를
+    // 분석으로 해석한다(여기서 inplace 로 뭉개면 auto 분기가 죽고 안내가 틀려진다).
+    const reqMode = String(req.body.mode || "").trim();
+    const mode = ["inplace", "retypeset", "auto"].includes(reqMode)
+      ? reqMode
+      : "auto";
+
+    runPdfTranslation(job, {
+      pdfBuffer: file.buffer,
+      originalName: file.originalname || "document.pdf",
+      model,
+      mode,
+    }).catch((err) => {
+      job.status = "error";
+      job.error = err.message || String(err);
+      pushProgress(job, `❌ 오류: ${job.error}`);
+      job.listeners.forEach((r) => {
+        sendSse(r, "error", job.error);
+        r.end();
+      });
+      job.listeners = [];
+    });
+  },
+);
+
+// 텍스트 PDF 를 페이지 구간 sub-PDF 버퍼들로 분할(재조판 병렬 번역용). 1구간이면 null.
+async function splitPdfToBuffers(pdfBuffer, { signal, onProgress }) {
+  const per = parseInt(process.env.PDF_RETYPESET_CHUNK_PAGES || "5", 10);
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pdfsplit-"));
+  const pdfPath = path.join(tmpDir, "in.pdf");
+  try {
+    fs.writeFileSync(pdfPath, pdfBuffer);
+    const meta = await splitPdf(pdfPath, tmpDir, { pagesPerChunk: per, signal });
+    if (!meta.chunks || meta.chunks.length <= 1) return null; // 분할 의미 없음
+    return meta.chunks.map((c) => fs.readFileSync(c.path));
+  } catch (e) {
+    onProgress(`⚠ 구간 분할 건너뜀(단일 처리): ${e.message}`);
+    return null;
+  } finally {
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch {
+      /* best-effort */
+    }
+  }
+}
+
+function buildTranslatedFilename(originalName, suffix = "_KO") {
+  const baseRaw = String(originalName || "document.pdf").replace(/\.pdf$/i, "");
+  const base = sanitizeForFilename(baseRaw) || "document";
+  return `${base}${suffix}.pdf`;
+}
+
+// 텍스트 레이어가 없는 스캔/이미지 PDF 를 감지하고, 그런 경우 페이지를 고해상도
+// 이미지 타일로 렌더링해 Claude 비전용 블록을 만든다(OCR 재조판 경로). 일반 PDF 면
+// { scanned:false } 만 돌려준다. 임시 파일은 항상 정리한다.
+async function prepareScannedRouting(pdfBuffer, { signal, onProgress }) {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pdftr-"));
+  const pdfPath = path.join(tmpDir, "in.pdf");
+  try {
+    fs.writeFileSync(pdfPath, pdfBuffer);
+    let scanned = false;
+    let mathDensity = 0;
+    try {
+      const a = await analyzePdf(pdfPath, { signal });
+      scanned = !!a.scanned;
+      mathDensity = Number(a.math_density) || 0;
+    } catch (e) {
+      onProgress(`⚠ 텍스트 레이어 분석을 건너뜁니다: ${e.message}`);
+      return { scanned: false, imageBlocks: null, mathDensity: 0 };
+    }
+    if (!scanned) return { scanned: false, imageBlocks: null, mathDensity };
+
+    onProgress(
+      "🖼️ 텍스트 레이어가 없는 스캔/이미지 PDF 감지 → 고해상도 OCR 재조판으로 전환",
+    );
+    const maxPages = parseInt(process.env.PDF_OCR_MAX_PAGES || "30", 10);
+    const meta = await rasterizePages(pdfPath, tmpDir, { maxPages, signal });
+    if (!meta.files || !meta.files.length) {
+      throw new Error("페이지 이미지를 생성하지 못했습니다.");
+    }
+    onProgress(`🧩 페이지를 ${meta.tiles}개 이미지 조각으로 분할(읽기 좋게)`);
+    // 원본 PNG 타일 버퍼(그림 복원 crop 용) — Claude 가 보는 imageBlocks 와 같은 순서 유지.
+    const tileBuffers = meta.files.map((f) => fs.readFileSync(f));
+    // 이미지 압축을 병렬로(순차 await 제거).
+    const prepared = await Promise.all(
+      tileBuffers.map((buf, i) =>
+        prepareImageForAnthropic(
+          { buffer: buf, name: path.basename(meta.files[i]), mimetype: "image/png" },
+          { forceCompress: true },
+        ).catch(() => null),
+      ),
+    );
+    // 준비 성공한 것만 블록으로 보내고, 그에 대응하는 원본 버퍼를 같은 순서로 보관
+    // (일부 실패 시에도 Claude 의 image 인덱스 ↔ crop 대상 타일 정합 유지).
+    const blocks = [];
+    const keptTiles = [];
+    prepared.forEach((p, i) => {
+      if (p && p.ok) {
+        blocks.push(toAnthropicImageBlock(p));
+        keptTiles.push(tileBuffers[i]);
+      }
+    });
+    if (!blocks.length) {
+      throw new Error("이미지를 Claude 입력 형식으로 준비하지 못했습니다.");
+    }
+    return {
+      scanned: true,
+      imageBlocks: blocks,
+      tileBuffers: keptTiles,
+      truncated: !!meta.truncated,
+      tiles: meta.tiles,
+      pageCount: meta.page_count,
+      mathDensity,
+    };
+  } finally {
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch {
+      /* best-effort cleanup */
+    }
+  }
+}
+
+async function runPdfTranslation(job, { pdfBuffer, originalName, model, mode }) {
+  const t0 = Date.now();
+  const timeoutMin = Math.round(PDF_TRANSLATE_TIMEOUT_MS / 60000);
+  pushProgress(job, `🚀 PDF 통번역 시작 (timeout: ${timeoutMin}분)`);
+
+  const ac = new AbortController();
+  job.abortController = ac;
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    pushProgress(job, `⏰ ${timeoutMin}분 초과 — 강제 종료 중...`);
+    ac.abort();
+  }, PDF_TRANSLATE_TIMEOUT_MS);
+
+  try {
+    const sizeKB = Math.round(pdfBuffer.length / 1024);
+    pushProgress(job, `📥 PDF 수신 (${sizeKB}KB)`);
+
+    const onProgress = (msg) => pushProgress(job, msg);
+
+    // 스캔/이미지 PDF 라우팅: 텍스트 레이어가 없으면 in-place 든 retypeset 이든
+    // 무조건 고해상도 OCR 재조판으로 처리한다(글자 교체는 텍스트 박스가 없어 불가).
+    const routing = await prepareScannedRouting(pdfBuffer, {
+      signal: ac.signal,
+      onProgress,
+    });
+
+    // 변환 방식 결정.
+    // - 명시적 '재조판' → 그대로.
+    // - '자동' → 스캔/수식밀도로 결정.
+    // - '빠른 번역(in-place)' → 일반 문서는 그대로 두되, **스캔본·수식 많은 문서는
+    //   in-place 로는 수식이 깨지므로 재조판으로 강제 전환**(캐시된 옛 페이지/오선택
+    //   방어 — 이런 문서에서 in-place 는 절대 좋은 결과가 안 나옴).
+    const AUTO_MATH_THRESHOLD = Number(process.env.PDF_AUTO_MATH_THRESHOLD || 12);
+    const isAuto = mode !== "inplace" && mode !== "retypeset";
+    const needsRetypeset =
+      routing.scanned || (routing.mathDensity || 0) >= AUTO_MATH_THRESHOLD;
+    let resolvedMode;
+    if (mode === "retypeset") {
+      resolvedMode = "retypeset";
+    } else {
+      resolvedMode = needsRetypeset ? "retypeset" : "inplace";
+    }
+    if (mode === "inplace" && needsRetypeset) {
+      pushProgress(
+        job,
+        "⚠ 수식이 많은(또는 스캔) 문서는 '빠른 번역'으로 수식이 깨집니다 → '재조판'으로 자동 전환합니다." +
+          (routing.scanned ? " · 스캔본" : ` · 수식밀도 ${routing.mathDensity ?? 0}`),
+      );
+    } else if (isAuto) {
+      pushProgress(
+        job,
+        `🔎 자동 변환방식 → ${resolvedMode === "retypeset" ? "재조판(수식·정밀)" : "빠른 번역(레이아웃 유지)"}` +
+          (routing.scanned
+            ? " · 스캔본 감지"
+            : ` · 수식밀도 ${routing.mathDensity ?? 0}`),
+      );
+    }
+
+    let effectiveMode = resolvedMode;
+    let result;
+    if (routing.scanned && routing.imageBlocks) {
+      if (routing.truncated) {
+        pushProgress(
+          job,
+          `⚠ 페이지/분량이 많아 앞부분 위주로 처리합니다(이미지 ${routing.tiles}조각).`,
+        );
+      }
+      result = await retypesetPdf({
+        pdfBuffer,
+        imageBlocks: routing.imageBlocks,
+        tiles: routing.tileBuffers, // 원본 타일 — 그림 복원 crop 용
+        model,
+        signal: ac.signal,
+        onProgress,
+      });
+      effectiveMode = "retypeset"; // 출력은 재조판본(_재조판)
+      if (result.figures) {
+        pushProgress(job, `🖼️ 원본 그림 ${result.figures}개를 본문에 복원했습니다.`);
+      }
+    } else if (resolvedMode === "retypeset") {
+      // 텍스트 PDF 재조판: 페이지 구간으로 분할해 병렬 번역(Opus 품질 유지·속도↑).
+      const pdfChunks = await splitPdfToBuffers(pdfBuffer, {
+        signal: ac.signal,
+        onProgress,
+      });
+      result = await retypesetPdf({
+        pdfBuffer,
+        pdfChunks,
+        model,
+        signal: ac.signal,
+        onProgress,
+      });
+    } else {
+      result = await translatePdf({
+        pdfBuffer,
+        model,
+        signal: ac.signal,
+        onProgress,
+      });
+    }
+
+    job.result = result.buffer;
+    job.mimeType = "application/pdf";
+    job.filename = buildTranslatedFilename(
+      originalName,
+      effectiveMode === "retypeset" ? "_재조판" : "_KO",
+    );
+    job.status = "done";
+
+    const totalSec = Math.floor((Date.now() - t0) / 1000);
+    const outKB = Math.round(result.buffer.length / 1024);
+    pushProgress(
+      job,
+      effectiveMode === "retypeset"
+        ? `🎉 재조판 완료! ${outKB}KB, 총 ${totalSec}초. 다운로드 가능합니다.`
+        : `🎉 완료! ${result.pageCount}쪽 / 문단 ${result.blockCount}개 → ${outKB}KB, 총 ${totalSec}초. 다운로드 가능합니다.`,
+    );
+
+    if (result.cost) {
+      pushProgress(job, `📊 ${pricing.formatCostLine(result.cost)}`);
+      addToTotal(result.cost, null);
+    }
+
+    // 사용량 기록 (관리자 통계용). 파일함(Supabase storage)은 docx/hwpx MIME 만
+    // 허용하도록 만들어져 있어 PDF 는 저장하지 않는다 — 다운로드는 24시간 동안
+    // job 결과로 제공된다. 일반 공개 시 버킷 정책과 함께 파일함 저장을 켠다.
+    if (supa.isEnabled() && job.userInfo?.id) {
+      try {
+        await supa.recordUsage({
+          userId: job.userInfo.id,
+          jobId: job.id,
+          textCostUsd: result.cost?.total || 0,
+          imageCostUsd: 0,
+          meta: {
+            reportType: "pdf-translate",
+            reportLabel: "PDF 통번역",
+            title: originalName,
+            model: result.cost?.model,
+            inputTokens: result.cost?.inputTokens,
+            outputTokens: result.cost?.outputTokens,
+            cacheReadTokens: result.cost?.cacheReadTokens,
+            cacheWriteTokens: result.cost?.cacheWriteTokens,
+            pageCount: result.pageCount,
+            blockCount: result.blockCount,
+          },
+        });
+      } catch (e) {
+        pushProgress(job, `⚠ 사용량 통계 기록 실패: ${e.message}`);
+      }
+    } else {
+      pushProgress(
+        job,
+        `📊 서버 누적 (메모리): ${totalUsage.jobs}건 / 총 ${fmtUSD(totalUsage.totalUSD)} ${fmtKRW(totalUsage.totalUSD)}`,
+      );
+    }
+    // 관리자 전용 기능 — 크레딧 차감 없음.
+  } catch (e) {
+    if (job.autoAborted) {
+      throw new Error("새 작업 시작으로 자동 중단되었습니다.");
+    }
+    if (job.userAborted) {
+      throw new Error("사용자가 작업을 중지했습니다.");
+    }
+    if (timedOut) {
+      const elapsedMin = Math.floor((Date.now() - t0) / 60000);
+      throw new Error(
+        `${timeoutMin}분 timeout으로 작업이 강제 종료되었습니다 (실제 ${elapsedMin}분 경과).`,
+      );
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+    if (
+      job.userInfo?.id &&
+      activeJobByUser.get(job.userInfo.id) === job.id
+    ) {
+      activeJobByUser.delete(job.userInfo.id);
+    }
+  }
+
+  job.listeners.forEach((r) => {
+    sendSse(r, "done", { filename: job.filename, fileId: job.fileId });
+    r.end();
+  });
+  job.listeners = [];
+}
+
 // 매뉴얼 파일명에서 첫 번째 숫자 그룹을 추출 (예: "I-08_Synthe..." -> "08")
 function extractManualNumber(filename) {
   if (!filename) return "";
@@ -969,7 +1594,10 @@ function extractReportLabel(filename) {
 }
 
 function sanitizeForFilename(s) {
+  // NFC 정규화 후 자르기 — macOS는 한글을 NFD(자모분해)로 주므로, 정규화 없이
+  // slice 하면 음절 중간이 잘려 "전ᄀ" 같은 깨진 자모가 남는다.
   return String(s || "")
+    .normalize("NFC")
     .replace(/[\\/:*?"<>|]/g, "_")
     .trim()
     .slice(0, 30);
@@ -1245,29 +1873,23 @@ async function runGeneration(job, pipeline, pipelineInput, meta) {
         pushProgress(job, `⚠ 사용량 통계 기록 실패: ${e.message}`);
       }
 
-      // 2) 종류별 잔액 차감 (admin이 아닌 일반 사용자만).
-      //    차감 실패는 '미청구 보고서'(돈 손실)이므로 절대 조용히 넘기지 않고
-      //    감사 가능한 error 로그 + 사용자 표시로 남긴다.
+      // 2) 크레딧 차감 (admin·무제한 계정 제외). 모델별 단가(Opus 3 / Sonnet 1).
+      //    차감 실패는 '미청구 보고서'(손실)이므로 조용히 넘기지 않고 감사 로그 + 사용자 표시.
       const userIsAdmin = !!job.userInfo.isAdmin;
-      if (!userIsAdmin && pipeline.creditField) {
-        const price = pricing.getReportPrice(job.reportType);
+      const userUnlimited = !!job.userInfo.unlimited;
+      if (
+        !userIsAdmin &&
+        !userUnlimited &&
+        supa.isEnabled() &&
+        job.userInfo.id
+      ) {
+        const cost = job.creditCost || pricing.getModelCredits(job.model);
         try {
-          const { newBalance } = await supa.deductCredit(
-            job.userInfo.id,
-            pipeline.creditField,
-            price,
-          );
-          const krwRate = await getKrwPerUsd();
-          const krw = Math.round(newBalance * krwRate);
-          const remainingCount = Math.floor(newBalance / price);
-          const label = pipeline.creditField === "pre" ? "사전" : "결과";
-          pushProgress(
-            job,
-            `💳 ${label} 잔액: $${newBalance.toFixed(3)} ≈ ₩${krw.toLocaleString()} (약 ${remainingCount}건 남음)`,
-          );
+          const { newBalance } = await supa.spendCredits(job.userInfo.id, cost);
+          pushProgress(job, `💳 크레딧 ${cost} 차감 — 남은 크레딧: ${newBalance}`);
         } catch (e) {
           console.error(
-            `[BILLING] credit deduction FAILED (uncharged report) userId=${job.userInfo.id} jobId=${job.id} field=${pipeline.creditField} priceUsd=${price} :: ${e.message}`,
+            `[BILLING] credit deduction FAILED (uncharged report) userId=${job.userInfo.id} jobId=${job.id} model=${job.model} cost=${cost} :: ${e.message}`,
           );
           pushProgress(
             job,
@@ -1464,11 +2086,14 @@ app.get("/api/admin/users", requireAdmin, async (req, res) => {
     return res.status(503).json({ error: "Supabase 미설정" });
   try {
     const users = await supa.listUsers();
-    // 각 사용자별 시간당 보고서 생성 카운트 추가
+    // 보고서 종류 접근 제한 맵(별도 fail-safe 쿼리 — 컬럼 없으면 빈 맵)
+    const blockedMap = await supa.listBlockedReportTypesMap();
+    // 각 사용자별 시간당 보고서 생성 카운트 + 차단 목록 추가
     const usersWithRate = users.map((u) => ({
       ...u,
       recent_gen_count: rateLimit.getUserGenCount(u.id),
       recent_gen_limit: rateLimit.GEN_LIMIT,
+      blocked_report_types: blockedMap[u.id] || [],
     }));
     const rate = await getKrwPerUsd();
     res.json({ users: usersWithRate, krwPerUsd: rate });
@@ -1527,12 +2152,44 @@ app.post("/api/admin/users", requireAdmin, async (req, res) => {
 app.patch("/api/admin/users/:id", requireAdmin, async (req, res) => {
   if (!supa.isEnabled())
     return res.status(503).json({ error: "Supabase 미설정" });
-  const { name, password, budgetUsd, budgetKrw, isAdmin, spentUsd } =
-    req.body || {};
+  const {
+    name,
+    password,
+    budgetUsd,
+    budgetKrw,
+    isAdmin,
+    spentUsd,
+    restrictedModel,
+    unlimited,
+    blockedReportTypes,
+  } = req.body || {};
   if (password != null && password !== "" && String(password).length < 5) {
     return res
       .status(400)
       .json({ error: "비밀번호는 최소 5자 이상이어야 합니다." });
+  }
+  // 모델 제한: "" = 전체 허용, 그 외엔 허용 모델 id만
+  if (restrictedModel !== undefined) {
+    const allowedRestrict = ["", "claude-opus-4-8", "claude-sonnet-4-6"];
+    const rm = restrictedModel == null ? "" : String(restrictedModel).trim();
+    if (!allowedRestrict.includes(rm)) {
+      return res
+        .status(400)
+        .json({ error: "허용되지 않은 모델 제한 값입니다." });
+    }
+  }
+  // 보고서 종류 접근 제한: 허용된 종류 key 배열만
+  let normalizedBlocked;
+  if (blockedReportTypes !== undefined) {
+    const VALID = ["chem-pre", "chem-result", "phys-result"];
+    if (!Array.isArray(blockedReportTypes)) {
+      return res
+        .status(400)
+        .json({ error: "blockedReportTypes 는 배열이어야 합니다." });
+    }
+    normalizedBlocked = [
+      ...new Set(blockedReportTypes.map((x) => String(x))),
+    ].filter((x) => VALID.includes(x));
   }
   const patch = {};
   if (name) patch.name = String(name).trim();
@@ -1543,11 +2200,23 @@ app.patch("/api/admin/users/:id", requireAdmin, async (req, res) => {
   }
   if (isAdmin != null) patch.isAdmin = !!isAdmin;
   if (spentUsd != null) patch.spentUsd = Number(spentUsd);
+  if (restrictedModel !== undefined)
+    patch.restrictedModel = restrictedModel == null ? "" : String(restrictedModel).trim();
+  if (unlimited != null) patch.unlimited = !!unlimited;
+  if (normalizedBlocked !== undefined)
+    patch.blockedReportTypes = normalizedBlocked;
   try {
     const user = await supa.updateUser(req.params.id, patch);
     res.json({ ok: true, user });
   } catch (e) {
     console.error("[admin]", req.method, req.path, "error:", e);
+    // blocked_report_types 컬럼 미생성(마이그레이션 전) 친절 안내
+    if (/blocked_report_types/.test(e.message || "")) {
+      return res.status(409).json({
+        error:
+          "보고서 종류 제한 컬럼이 아직 없습니다. db/migrations/20260603_add_blocked_report_types.sql 을 Supabase 에 실행하세요.",
+      });
+    }
     res.status(500).json({ error: "처리 중 오류가 발생했습니다." });
   }
 });
@@ -1575,33 +2244,21 @@ app.delete("/api/admin/users/:id", requireAdmin, async (req, res) => {
   }
 });
 
-// 종류별 잔액 충전 (admin만)
-// body: { field: "pre"|"result", count?: N, usd?: X }
-//   - count 우선: count × 단가만큼 USD 추가
-//   - usd: 직접 USD 액수 추가
+// 크레딧 충전 (admin만). 통합 정수 크레딧.
+// body: { credits: N }  (하위호환: { count: N }도 크레딧 수로 받음)
 app.post("/api/admin/users/:id/topup", requireAdmin, async (req, res) => {
   if (!supa.isEnabled())
     return res.status(503).json({ error: "Supabase 미설정" });
-  const { field, count, usd } = req.body || {};
-  if (field !== "pre" && field !== "result") {
-    return res.status(400).json({ error: "field는 'pre' 또는 'result'여야 합니다." });
-  }
-  let addUsd = 0;
-  if (count != null) {
-    const reportType = field === "pre" ? "chem-pre" : "chem-result";
-    const price = pricing.getReportPrice(reportType);
-    addUsd = Number(count) * price;
-  } else if (usd != null) {
-    addUsd = Number(usd);
-  } else {
-    return res.status(400).json({ error: "count 또는 usd 중 하나 필수" });
-  }
-  if (!Number.isFinite(addUsd) || addUsd <= 0) {
-    return res.status(400).json({ error: "충전 금액이 유효하지 않습니다." });
+  const { credits, count } = req.body || {};
+  let add = null;
+  if (credits != null) add = Math.trunc(Number(credits));
+  else if (count != null) add = Math.trunc(Number(count)); // 하위호환: count = 크레딧 수
+  if (add == null || !Number.isFinite(add) || add <= 0) {
+    return res.status(400).json({ error: "credits(양의 정수) 필수" });
   }
   try {
-    const result = await supa.topupCredit(req.params.id, field, addUsd);
-    res.json({ ok: true, addedUsd: addUsd, ...result });
+    const result = await supa.addCredits(req.params.id, add);
+    res.json({ ok: true, addedCredits: add, ...result });
   } catch (e) {
     console.error("[admin]", req.method, req.path, "error:", e);
     res.status(500).json({ error: "처리 중 오류가 발생했습니다." });
@@ -1612,24 +2269,65 @@ app.post("/api/admin/users/:id/topup", requireAdmin, async (req, res) => {
 app.get("/api/me/balance", requireAuth, async (req, res) => {
   const u = getSessionUser(req);
   if (u.isAdmin) {
-    return res.json({ isAdmin: true });
+    return res.json({ isAdmin: true, modelCredits: pricing.MODEL_CREDITS });
   }
   if (!supa.isEnabled() || !u.id) {
-    return res.json({ preUsd: 0, resultUsd: 0, krwPerUsd: 1400 });
+    return res.json({ credits: 0, modelCredits: pricing.MODEL_CREDITS });
   }
   try {
     const user = await supa.findUserById(u.id);
-    const rate = await getKrwPerUsd();
     res.json({
-      preUsd: Number(user?.pre_credits_usd) || 0,
-      resultUsd: Number(user?.result_credits_usd) || 0,
-      krwPerUsd: rate,
-      preUnitUsd: pricing.getReportPrice("chem-pre"),
-      resultUnitUsd: pricing.getReportPrice("chem-result"),
+      credits: Math.max(0, Math.trunc(Number(user?.credits) || 0)),
+      unlimited: !!user?.unlimited,
+      restrictedModel: user?.restricted_model || null,
+      modelCredits: pricing.MODEL_CREDITS,
     });
   } catch (e) {
     console.error("[me/balance] error:", e);
     res.status(500).json({ error: "잔액 조회 실패" });
+  }
+});
+
+// 본인 사용 내역 대시보드: 크레딧 + 이번 시간 생성 횟수 + 최근 생성 이력
+app.get("/api/me/usage", requireAuth, async (req, res) => {
+  const u = getSessionUser(req);
+  const genCount = u.id ? rateLimit.getUserGenCount(u.id) : 0;
+  const base = {
+    isAdmin: !!u.isAdmin,
+    genCount,
+    genLimit: rateLimit.GEN_LIMIT,
+    modelCredits: pricing.MODEL_CREDITS,
+  };
+  if (!supa.isEnabled() || !u.id) {
+    return res.json({ ...base, credits: 0, recent: [] });
+  }
+  const REAL = new Set(["chem-pre", "chem-result", "phys-result"]);
+  try {
+    const user = await supa.findUserById(u.id);
+    const logs = await supa.listUsageLogsForUser(u.id, 20);
+    const recent = logs.map((l) => {
+      const model = l.meta?.model || null;
+      const rt = l.meta?.reportType || null;
+      return {
+        date: l.created_at,
+        label: l.meta?.reportLabel || rt || "생성",
+        reportType: rt,
+        model,
+        // 실제 보고서 3종만 크레딧 차감 — 베타(예: pdf-translate)는 무료(null)
+        credits: model && REAL.has(rt) ? pricing.getModelCredits(model) : null,
+        title: l.meta?.title || null,
+      };
+    });
+    res.json({
+      ...base,
+      credits: Math.max(0, Math.trunc(Number(user?.credits) || 0)),
+      unlimited: !!user?.unlimited,
+      restrictedModel: user?.restricted_model || null,
+      recent,
+    });
+  } catch (e) {
+    console.error("[me/usage] error:", e);
+    res.json({ ...base, credits: 0, recent: [] }); // fail-safe
   }
 });
 
@@ -1686,10 +2384,9 @@ app.get("/admin", (req, res) => {
 });
 
 app.get("/", (req, res) => {
-  if (getSessionUser(req)) {
-    return res.sendFile(path.join(__dirname, "public", "index.html"));
-  }
-  res.redirect("/login.html");
+  // 로그인 여부와 무관하게 같은 페이지(같은 골격)를 준다. 로그아웃 상태면
+  // index.html 이 상단 '로그인' 드롭다운을 띄우고, 로그인하면 그 자리가 계정 메뉴로 바뀐다.
+  res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
 app.get("/healthz", (req, res) => res.json({ ok: true }));
@@ -1774,5 +2471,22 @@ app.listen(PORT, async () => {
       });
     }, 6 * 60 * 60 * 1000);
     if (typeof cleanupTimer.unref === "function") cleanupTimer.unref();
+  }
+
+  // ── 자가 핑(self-ping): Render 무료 인스턴스가 15분 무활동 시 잠드는 것을 방지.
+  // 서버가 자기 public URL(/api/keepalive)을 주기적으로 호출 → 인바운드 트래픽 발생 →
+  // Render idle 타이머가 리셋되어 잠들지 않는다. (GitHub Actions cron은 고빈도 스케줄을
+  // 심하게 throttle해서 못 쓴다 — 자가 핑은 프로세스가 살아있는 한 정확히 동작.)
+  // RENDER_EXTERNAL_URL은 Render가 자동 주입. 다른 호스트면 SELF_PING_URL로 지정.
+  const SELF_URL = process.env.RENDER_EXTERNAL_URL || process.env.SELF_PING_URL;
+  if (SELF_URL && process.env.DISABLE_SELF_PING !== "1") {
+    const pingUrl = SELF_URL.replace(/\/+$/, "") + "/api/keepalive";
+    const selfPingTimer = setInterval(() => {
+      fetch(pingUrl).catch(() => {});
+    }, 5 * 60 * 1000); // 5분마다 (Render 15분 한계보다 충분히 짧게, 1회 실패에도 여유)
+    if (typeof selfPingTimer.unref === "function") selfPingTimer.unref();
+    console.log(`  ✓ self-ping 활성화: ${pingUrl} (5분 간격)`);
+  } else {
+    console.log("  · self-ping 비활성 (RENDER_EXTERNAL_URL 없음 또는 DISABLE_SELF_PING=1)");
   }
 });

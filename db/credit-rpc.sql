@@ -49,3 +49,37 @@ begin
   return new_balance;
 end;
 $$;
+
+-- ---------------------------------------------------------------------------
+-- 통합 크레딧 포인트(정수) 원자적 차감 RPC
+-- 모델별 과금(Opus 3 / Sonnet 1)으로 전환한 새 크레딧제용.
+-- lib/supabase.js의 spendCredits()가 우선 사용, 없으면 read-modify-write 폴백.
+-- ---------------------------------------------------------------------------
+create or replace function spend_credits(
+  p_user_id text,
+  p_amount integer
+)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  new_balance integer;
+begin
+  if p_amount is null or p_amount < 0 then
+    raise exception 'invalid amount: %', p_amount;
+  end if;
+
+  update users
+    set credits = greatest(coalesce(credits, 0) - p_amount, 0)
+    where id::text = p_user_id
+    returning credits into new_balance;
+
+  if new_balance is null then
+    raise exception 'user not found: %', p_user_id;
+  end if;
+
+  return new_balance;
+end;
+$$;

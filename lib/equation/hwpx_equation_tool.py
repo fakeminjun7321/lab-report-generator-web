@@ -551,8 +551,77 @@ def quote_textual_subscripts(script: str) -> str:
     return re.sub(r"_\{([^{}]+)\}", repl, str(script or ""))
 
 
+def convert_inline_radicals(script: str) -> str:
+    r"""Render spelled-out / unicode radicals as the native HWP ``sqrt {...}``.
+
+    The LaTeX path already turns ``\sqrt{...}`` into ``sqrt {...}`` via
+    ``_replace_sqrt``. This is the safety net for the ``{{EQ:...}}`` (HWP-script)
+    path and for any stray ``sqrt(...)`` / ``√(...)`` that reaches the final
+    script, so chemistry formulas like ``[H+] = sqrt(Ka C)`` form a real radical
+    instead of literal text. An already-native ``sqrt {...}`` is left untouched
+    and an unbalanced ``sqrt(`` is left as-is (fail safe: never emits a body-less
+    command).
+    """
+    if "√" not in script and not re.search(r"(?<![A-Za-z\\])sqrt\b", script):
+        return script
+    # Normalise the spelled-out name to the symbol, but never an already-native
+    # ``sqrt {`` keyword nor a LaTeX ``\sqrt``.
+    text = re.sub(
+        r"(?<![A-Za-z\\])sqrt\b(?!\s*\{)", "√", script, flags=re.IGNORECASE
+    )
+    if "√" not in text:
+        return text
+    n = len(text)
+    brackets = {"(": ")", "{": "}", "[": "]"}
+    out: list[str] = []
+    i = 0
+    while i < n:
+        if text[i] != "√":
+            out.append(text[i])
+            i += 1
+            continue
+        if out and (out[-1].isalnum() or out[-1] in ")]}"):
+            out.append(" ")
+        j = i + 1
+        while j < n and text[j].isspace():
+            j += 1
+        if j < n and text[j] in brackets:
+            opener = text[j]
+            closer = brackets[opener]
+            depth = 0
+            k = j
+            inner = None
+            while k < n:
+                if text[k] == opener:
+                    depth += 1
+                elif text[k] == closer:
+                    depth -= 1
+                    if depth == 0:
+                        inner = text[j + 1:k]
+                        i = k + 1
+                        break
+                k += 1
+            if inner is not None:
+                out.append("sqrt {" + inner.strip() + "}")
+                continue
+            out.append("√")  # unbalanced — fail safe
+            i += 1
+            continue
+        atom = re.match(
+            r"([A-Za-z0-9.]+(?:_\{[^{}]*\}|\^\{[^{}]*\}|\^[A-Za-z0-9])?)", text[j:]
+        )
+        if atom:
+            out.append("sqrt {" + atom.group(1) + "}")
+            i = j + atom.end()
+            continue
+        out.append("√")
+        i += 1
+    return "".join(out)
+
+
 def normalize_hwp_script(script: str) -> str:
     text = str(script or "").strip()
+    text = convert_inline_radicals(text)
     text = (
         text.replace("→", "->")
         .replace("⟶", "->")

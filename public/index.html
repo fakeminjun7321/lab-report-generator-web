@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>보고서 작성 툴</title>
+    <title>Quilo</title>
     <script>
       // FOUC 방지: CSS 적용 전에 테마를 먼저 설정한다.
       (function () {
@@ -20,16 +20,80 @@
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
-    <header class="app-header">
-      <div class="app-bar">
+    <header class="topnav" id="topnav">
+      <div class="topnav-inner">
         <a href="/" class="brand">
-          <span class="brand-mark" aria-hidden="true">R</span>
-          보고서 작성 툴
+          <span class="brand-mark" aria-hidden="true">Q</span>
+          Quilo
         </a>
-        <div class="header-actions">
-          <span id="user"></span>
-          <a href="/admin" id="adminLink" style="display: none">관리자</a>
-          <a href="#" id="logout">로그아웃</a>
+        <button type="button" class="topnav-burger" id="navBurger" aria-label="메뉴 열기">☰</button>
+        <nav class="topnav-menu" id="navMenu" aria-label="주 메뉴">
+          <div class="nav-dd" data-dd>
+            <button type="button" class="nav-dd-btn">보고서 작성 <span class="caret" aria-hidden="true">▾</span></button>
+            <div class="nav-dd-menu">
+              <a href="#" data-report="chem-pre">화학 사전보고서</a>
+              <a href="#" data-report="chem-result">화학 결과보고서</a>
+              <a href="#" data-report="phys-result">물리 결과보고서</a>
+            </div>
+          </div>
+          <div class="nav-dd" data-dd>
+            <button type="button" class="nav-dd-btn">도구 모음 <span class="caret" aria-hidden="true">▾</span></button>
+            <div class="nav-dd-menu">
+              <a href="/tools/word-count.html">글자수 세기</a>
+              <a href="/tools/regression.html">선형회귀 · 추세선</a>
+              <a href="/tools/graph.html">그래프 생성기</a>
+              <a href="/tools/convert.html">파일 변환기 <span style="font-size:11px;opacity:.6">· 이미지·PDF·수식</span></a>
+              <a href="/translate.html" id="navBetaTranslate" hidden>PDF 통번역 <span class="beta-pill">베타</span></a>
+            </div>
+          </div>
+          <div class="nav-dd" data-dd>
+            <button type="button" class="nav-dd-btn">예시 · 가이드 <span class="caret" aria-hidden="true">▾</span></button>
+            <div class="nav-dd-menu">
+              <a href="/examples.html">예시 모음</a>
+              <a href="/guide.html">이용 가이드</a>
+              <a href="/changelog.html">패치노트</a>
+            </div>
+          </div>
+          <!-- 로그아웃 상태: '로그인' 누르면 로그인 폼이 드롭다운으로 내려온다 -->
+          <div class="nav-dd nav-dd-right" data-dd id="loginDd" hidden>
+            <button type="button" class="nav-dd-btn nav-login-trigger">로그인 <span class="caret" aria-hidden="true">▾</span></button>
+            <div class="nav-dd-menu nav-login-menu">
+              <form id="loginForm">
+                <div class="auth-head" style="margin-bottom:6px">
+                  <strong>로그인</strong>
+                  <p class="hint" style="margin:2px 0 0">계정으로 로그인해 시작하세요.</p>
+                </div>
+                <div class="field">
+                  <label><span class="field-label">이름</span>
+                  <input id="li_username" required maxlength="50" autocomplete="username" /></label>
+                </div>
+                <div class="field">
+                  <label><span class="field-label">비밀번호</span>
+                  <input id="li_password" type="password" required autocomplete="current-password" /></label>
+                </div>
+                <label class="check-line"><input type="checkbox" id="li_age14" /> <span>만 14세 이상 <strong>(필수)</strong></span></label>
+                <label class="check-line"><input type="checkbox" id="li_agree" /> <span>약관·개인정보·환불정책 동의 <strong>(필수)</strong></span></label>
+                <div class="form-actions" style="margin-top:8px">
+                  <button type="submit" id="li_btn" class="btn btn-primary">로그인</button>
+                </div>
+                <p id="li_err" class="form-error" style="display:none"></p>
+                <p class="hint" style="text-align:center;margin:6px 0 0">계정이 없으신가요? <a href="/signup.html">회원가입</a></p>
+              </form>
+            </div>
+          </div>
+
+          <!-- 로그인 상태: 계정 메뉴 -->
+          <div class="nav-dd nav-dd-right" data-dd id="acctDd" hidden>
+            <button type="button" class="nav-dd-btn"><span id="user">내 계정</span> <span class="caret" aria-hidden="true">▾</span></button>
+            <div class="nav-dd-menu">
+              <a href="#" data-tab="files">내 파일</a>
+              <a href="#" data-tab="settings">개인 설정</a>
+              <a href="#" data-tab="feedback">건의사항</a>
+              <a href="/admin" id="adminLink" style="display: none">관리자</a>
+              <div class="dd-sep" aria-hidden="true"></div>
+              <a href="#" id="logout">로그아웃</a>
+            </div>
+          </div>
           <button
             type="button"
             id="themeToggle"
@@ -40,48 +104,46 @@
             <span class="theme-icon-light" aria-hidden="true">🌙</span>
             <span class="theme-icon-dark" aria-hidden="true">☀️</span>
           </button>
-        </div>
-      </div>
-
-      <div class="app-hero">
-        <h1>보고서 작성 툴</h1>
-        <div class="notice compliance-notice">
-          <strong>학습 보조 초안 생성 도구입니다.</strong>
-          본인이 이용 권한을 가진 파일만 업로드하고, 학교·교사 기준에서 AI 사용이 허용되는 범위인지 확인한 뒤 사용하세요.
-          생성 결과는 그대로 제출하지 말고 반드시 직접 검토·수정하세요.
-          업로드 파일은 AI 처리 과정에서 외부 처리업체로 전송될 수 있으며, 생성 파일은 24시간만 보관됩니다.
-        </div>
+        </nav>
       </div>
     </header>
 
-    <nav class="page-tabs" aria-label="화면 전환">
-      <button type="button" class="active" data-tab="reports">보고서 작성</button>
-      <button type="button" data-tab="files">내 파일</button>
-      <button type="button" data-tab="feedback">건의사항</button>
-      <button type="button" data-tab="settings">개인 설정</button>
-    </nav>
+    <p class="slim-disclaimer">
+      <strong>학습 보조 초안 생성 도구입니다.</strong>
+      본인이 권한을 가진 파일만 올리고, 학교·교사 기준에서 AI 사용이 허용되는지 확인 후 사용하세요. 생성 결과는 반드시 직접 검토·수정하고 그대로 제출하지 마세요. 업로드 파일은 AI 처리 중 외부 처리업체로 전송될 수 있으며, 생성 파일은 24시간만 보관됩니다.
+    </p>
 
     <section id="reportsPanel" class="tab-panel active" data-tab-panel="reports">
-    <div class="app-banner">
-      <div class="app-banner-ico" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg>
+    <section class="home-hero" id="homeHero">
+      <span class="eyebrow">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15" aria-hidden="true"><path d="M5 3v4M3 5h4M6 17v4M4 19h4"/><path d="M13 3l2.4 6.6L22 12l-6.6 2.4L13 21l-2.4-6.6L4 12l6.6-2.4z"/></svg>
+        AI 학습 보조 · 화학 · 물리 실험 보고서
+      </span>
+      <h1>실험 보고서 초안,<br /><span class="grad">몇 분 만에 끝.</span></h1>
+      <p class="home-hero-sub">
+        매뉴얼·데이터·사진만 올리면 화학/물리 <b>사전·결과보고서 초안</b>을 학교 양식(.docx/.hwpx)으로 만들어 줍니다.
+        표·그래프·사진·수식까지 문서 안에 그대로 들어갑니다.
+      </p>
+      <div class="home-hero-cta">
+        <button type="button" class="btn btn-primary btn-lg" id="heroStart">지금 시작하기 →</button>
+        <a class="btn btn-outline btn-lg" href="#features">어떤 게 되나요?</a>
       </div>
-      <div>
-        <h2>보고서 만들기</h2>
-        <p>보고서 종류를 고르고 자료를 올리면 초안을 생성합니다. 결과는 반드시 직접 검토·수정해 사용하세요.</p>
-      </div>
-    </div>
-    <div class="report-toolbar">
+      <ul class="home-hero-points">
+        <li>화학 사전 · 화학 결과 · 물리 결과 3종</li>
+        <li>.docx / .hwpx(한글) 출력 · 표·차트·사진 자동 삽입</li>
+        <li>업로드 파일은 24시간만 보관</li>
+      </ul>
+    </section>
+    <div class="report-toolbar" id="reportTypes">
       <div id="balanceBox" class="balance-box" style="display: none">
-        <strong>내 잔액</strong>
-        <span id="balPre">사전: ...</span>
-        <span id="balResult">결과: ...</span>
+        <strong>내 크레딧</strong>
+        <span id="balCredits">...</span>
       </div>
 
       <div id="reportTypeFieldset" role="radiogroup" aria-labelledby="reportTypeLegend">
         <div id="reportTypeLegend" class="report-type-title">보고서 종류</div>
         <label>
-          <input type="radio" name="reportType" value="chem-pre" checked />
+          <input type="radio" name="reportType" value="chem-pre" />
           <span class="rt-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v6l-5.4 9.4A2 2 0 0 0 6.3 21h11.4a2 2 0 0 0 1.7-2.6L14 9V3"/><path d="M7.5 14h9"/></svg></span>
           <span class="rt-title">화학 사전보고서</span>
           <span class="rt-tag">매뉴얼 PDF → 사전보고서 초안</span>
@@ -159,7 +221,7 @@
             <span class="field-label">AI 참고 메모 / 내 의견 (선택)</span>
             <textarea id="crUserNotes" name="userNotes" rows="4" maxlength="12000" placeholder="예: 색 변화가 예상보다 늦게 나타났고, 마지막 적정값은 종말점 판단이 애매해서 오차 분석에 반영하고 싶음"></textarea>
           </label>
-          <small>.md/.txt 파일로 길게 작성한 메모도 함께 첨부할 수 있습니다.</small>
+          <small>.md/.txt 파일로 길게 작성한 메모도 함께 첨부할 수 있습니다. <a href="/examples.html#notes" target="_blank" rel="noopener">작성 가이드·예시 보기 →</a></small>
           <input id="crUserNotesFile" name="userNotesFile" type="file" accept=".md,.txt,text/markdown,text/plain" aria-label="참고 메모 파일" />
         </div>
       </div>
@@ -191,7 +253,13 @@
         <div class="form-section-head">
           <span class="form-section-title">출력 설정</span>
         </div>
-        <input type="hidden" name="crModel" value="claude-opus-4-8" />
+        <div class="seg-group" style="margin-bottom: 12px">
+          <span class="field-label">AI 모델 (보고서 1건당 크레딧)</span>
+          <div class="segmented">
+            <label><input type="radio" name="crModel" value="claude-opus-4-8" checked /> Opus 4.8 · 3크레딧</label>
+            <label><input type="radio" name="crModel" value="claude-sonnet-4-6" /> Sonnet 4.6 · 1크레딧</label>
+          </div>
+        </div>
         <div class="field-grid cols-3">
           <div class="seg-group">
             <span class="field-label">출력 형식</span>
@@ -293,7 +361,7 @@
             <span class="field-label">AI 참고 메모 / 내 의견 (선택)</span>
             <textarea id="prUserNotes" name="userNotes" rows="4" maxlength="12000" placeholder="예: 예비 시행 1회는 포토게이트가 흔들려 제외했고, 재측정에서는 트랙 이음새를 지나며 카트가 살짝 튀는 현상이 있었음"></textarea>
           </label>
-          <small>.md/.txt 파일로 길게 작성한 메모도 함께 첨부할 수 있습니다.</small>
+          <small>.md/.txt 파일로 길게 작성한 메모도 함께 첨부할 수 있습니다. <a href="/examples.html#notes" target="_blank" rel="noopener">작성 가이드·예시 보기 →</a></small>
           <input id="prUserNotesFile" name="userNotesFile" type="file" accept=".md,.txt,text/markdown,text/plain" aria-label="참고 메모 파일" />
         </div>
       </div>
@@ -315,7 +383,13 @@
         <div class="form-section-head">
           <span class="form-section-title">출력 설정</span>
         </div>
-        <input type="hidden" name="prModel" value="claude-opus-4-8" />
+        <div class="seg-group" style="margin-bottom: 12px">
+          <span class="field-label">AI 모델 (보고서 1건당 크레딧)</span>
+          <div class="segmented">
+            <label><input type="radio" name="prModel" value="claude-opus-4-8" checked /> Opus 4.8 · 3크레딧</label>
+            <label><input type="radio" name="prModel" value="claude-sonnet-4-6" /> Sonnet 4.6 · 1크레딧</label>
+          </div>
+        </div>
         <div class="field-grid">
           <div class="seg-group">
             <span class="field-label">출력 형식</span>
@@ -371,7 +445,7 @@
             <span class="field-label">AI 참고 메모 / 내 의견 (선택)</span>
             <textarea id="preUserNotes" name="userNotes" rows="4" maxlength="12000" placeholder="예: 선생님이 안전 주의와 수율 계산을 특히 강조했고, 실험 과정에서 왜 ice bath를 쓰는지 자세히 설명하고 싶음"></textarea>
           </label>
-          <small>.md/.txt 파일로 길게 작성한 메모도 함께 첨부할 수 있습니다.</small>
+          <small>.md/.txt 파일로 길게 작성한 메모도 함께 첨부할 수 있습니다. <a href="/examples.html#notes" target="_blank" rel="noopener">작성 가이드·예시 보기 →</a></small>
           <input id="preUserNotesFile" name="userNotesFile" type="file" accept=".md,.txt,text/markdown,text/plain" aria-label="참고 메모 파일" />
         </div>
       </div>
@@ -408,7 +482,13 @@
         <div class="form-section-head">
           <span class="form-section-title">출력 설정</span>
         </div>
-        <input type="hidden" name="model" value="claude-opus-4-8" />
+        <div class="seg-group" style="margin-bottom: 12px">
+          <span class="field-label">AI 모델 (보고서 1건당 크레딧)</span>
+          <div class="segmented">
+            <label><input type="radio" name="model" value="claude-opus-4-8" checked /> Opus 4.8 · 3크레딧</label>
+            <label><input type="radio" name="model" value="claude-sonnet-4-6" /> Sonnet 4.6 · 1크레딧</label>
+          </div>
+        </div>
         <div class="field-grid cols-3">
           <div class="seg-group">
             <span class="field-label">출력 형식</span>
@@ -465,6 +545,65 @@
       <pre id="progress"></pre>
       <div id="resultArea"></div>
     </div>
+
+    <!-- ── 홍보: 무엇이 되나요 ───────────────────────────── -->
+    <section class="section" id="features">
+      <div class="section-head">
+        <h2>어떤 보고서를 만들 수 있나요?</h2>
+        <p>업로드한 자료를 분석해 학교 양식에 맞는 초안을 만들어 줍니다. 표·그래프·사진·수식까지 문서 안에 직접 들어갑니다.</p>
+      </div>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <div class="feature-ico">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6M10 3v6l-5.4 9.4A2 2 0 0 0 6.3 21h11.4a2 2 0 0 0 1.7-2.6L14 9V3"/><path d="M7.5 14h9"/></svg>
+          </div>
+          <h3>화학 사전보고서</h3>
+          <p>실험 매뉴얼 PDF에서 이론·원리를 전개하고, 시약 물성을 정리해 사전보고서 초안을 만듭니다.</p>
+          <span class="feature-tag">매뉴얼 PDF → 사전보고서</span>
+        </div>
+        <div class="feature-card">
+          <div class="feature-ico">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><rect x="7" y="11" width="3" height="6" rx="0.5"/><rect x="12.5" y="7" width="3" height="10" rx="0.5"/><rect x="18" y="9" width="3" height="8" rx="0.5"/></svg>
+          </div>
+          <h3>화학 결과보고서</h3>
+          <p>데이터·사진을 분석해 평균·오차를 계산하고, 표와 차트를 그려 사전보고서 뒤 결과 분량을 채웁니다.</p>
+          <span class="feature-tag">데이터·사진 → 결과 추가분</span>
+        </div>
+        <div class="feature-card">
+          <div class="feature-ico">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1.6"/><ellipse cx="12" cy="12" rx="10" ry="4.4"/><ellipse cx="12" cy="12" rx="10" ry="4.4" transform="rotate(60 12 12)"/><ellipse cx="12" cy="12" rx="10" ry="4.4" transform="rotate(120 12 12)"/></svg>
+          </div>
+          <h3>물리 결과보고서</h3>
+          <p>PASCO Capstone(.cap)·엑셀·CSV 데이터로 실험 파트별 표·그래프·분석·결론을 구성합니다.</p>
+          <span class="feature-tag">.cap·엑셀 → 결과보고서</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 홍보: 3단계 ───────────────────────────── -->
+    <section class="section" id="how">
+      <div class="section-head">
+        <h2>3단계면 끝</h2>
+        <p>복잡한 설정 없이, 올리고 기다리고 받으면 됩니다.</p>
+      </div>
+      <div class="steps">
+        <div class="step">
+          <span class="step-num">1</span>
+          <h3>자료 업로드</h3>
+          <p>매뉴얼·실험 데이터·사진을 드래그앤드롭으로 올립니다.</p>
+        </div>
+        <div class="step">
+          <span class="step-num">2</span>
+          <h3>AI가 초안 작성</h3>
+          <p>진행 상황을 실시간으로 보여주며 보고서 초안을 만듭니다.</p>
+        </div>
+        <div class="step">
+          <span class="step-num">3</span>
+          <h3>검토 후 다운로드</h3>
+          <p>.docx / .hwpx로 받아 직접 확인·수정한 뒤 사용합니다.</p>
+        </div>
+      </div>
+    </section>
     </section>
 
     <section id="filesPanel" class="tab-panel" data-tab-panel="files" hidden>
@@ -533,6 +672,20 @@
         </dl>
       </div>
 
+      <div class="settings-card" id="usageCard">
+        <h2>사용 내역</h2>
+        <dl class="settings-summary">
+          <dt>보유 크레딧</dt>
+          <dd id="usageCredits">-</dd>
+          <dt>이번 시간 생성</dt>
+          <dd id="usageGen">-</dd>
+          <dt id="usageRestrictDt" style="display:none">모델 제한</dt>
+          <dd id="usageRestrict" style="display:none">-</dd>
+        </dl>
+        <h3 style="margin:14px 0 6px;font-size:14px">최근 생성</h3>
+        <div id="usageRecent" style="font-size:13px"><p class="hint">불러오는 중…</p></div>
+      </div>
+
       <div class="settings-card">
         <h2>학번</h2>
         <form id="profileForm" class="compact-form">
@@ -549,6 +702,32 @@
             저장한 학번은 보고서 표지와 파일명에 자동으로 들어갑니다.
           </p>
         </form>
+      </div>
+
+      <div class="settings-card">
+        <h2>기본 모델 · 양식 선호</h2>
+        <p class="hint">보고서 작성 화면을 열 때 자동으로 선택될 기본값입니다. 생성할 때 언제든 바꿀 수 있습니다.</p>
+        <div class="compact-form">
+          <p>
+            <label>기본 AI 모델:<br>
+              <select id="prefModelSel" class="tool-input" style="max-width:280px">
+                <option value="">매번 직접 선택</option>
+                <option value="claude-opus-4-8">Opus 4.8 (정밀 · 3크레딧)</option>
+                <option value="claude-sonnet-4-6">Sonnet 4.6 (빠름 · 1크레딧)</option>
+              </select>
+            </label>
+          </p>
+          <p>
+            <label>기본 양식(화학 사전보고서):<br>
+              <select id="prefStyleSel" class="tool-input" style="max-width:280px">
+                <option value="">매번 직접 선택</option>
+                <option value="default">기본 양식</option>
+                <option value="minimal">간단 양식</option>
+              </select>
+            </label>
+          </p>
+          <p class="hint" id="prefSaveStatus" style="min-height:1.2em"></p>
+        </div>
       </div>
 
       <div class="settings-card">
@@ -586,14 +765,11 @@
         <a href="/terms.html">이용약관</a>
         <a href="/privacy.html">개인정보처리방침</a>
         <a href="/refund.html">환불정책</a>
-        <a href="/changelog.html">패치노트</a>
-        <a href="/tools/index.html">도구 모음</a>
-        <a href="/guide.html">이용 가이드</a>
         <a href="https://blog.naver.com/physicjun1905" target="_blank" rel="noopener">블로그</a>
         <a href="https://github.com/fakeminjun7321/lab-report-generator-web" target="_blank" rel="noopener">GitHub</a>
       </div>
       <div class="footer-copy">
-        © 2026 Lab Report Generator Web · MIT License ·
+        © 2026 Quilo · MIT License ·
         <span class="site-version" data-site-version>버전 확인 중...</span>
       </div>
     </footer>
@@ -636,10 +812,27 @@
         fd.append("policyAcceptedAt", new Date().toISOString());
       }
 
-      // Confirm session
-      fetch("/api/me")
-        .then((r) => (r.ok ? r.json() : Promise.reject()))
-        .then((d) => {
+      // 로그인 전/후 같은 페이지(같은 골격). 로그아웃이면 리다이렉트 대신
+      // 상단 '로그인' 드롭다운을 띄우고, 로그인하면 그 자리를 계정 메뉴로 바꾼다.
+      // 차단된 보고서 종류 카드를 숨긴다(서버에서도 강제 — 이건 UX용).
+      function applyReportTypeAccess(blocked) {
+        const set = new Set(Array.isArray(blocked) ? blocked : []);
+        document.querySelectorAll('input[name="reportType"]').forEach((radio) => {
+          const label = radio.closest("label");
+          if (!label) return;
+          const hide = set.has(radio.value);
+          label.style.display = hide ? "none" : "";
+          if (hide && radio.checked) radio.checked = false;
+        });
+      }
+
+      function applyAuth(loggedIn, d) {
+        document.body.dataset.auth = loggedIn ? "in" : "out";
+        const loginDd = document.getElementById("loginDd");
+        const acctDd = document.getElementById("acctDd");
+        if (loginDd) loginDd.hidden = loggedIn;
+        if (acctDd) acctDd.hidden = !loggedIn;
+        if (loggedIn && d) {
           document.getElementById("user").textContent = d.user + " 님 ";
           document.getElementById("settingsUserName").textContent = d.user;
           setStudentIdUi(d.studentId || getLocalStudentId());
@@ -649,11 +842,86 @@
           if (d.isAdmin) {
             document.getElementById("adminLink").style.display = "inline";
           }
-          // 일반 사용자: 잔액 박스 표시
+          // 관리자는 서버에서 제한 면제 → 카드도 전부 표시
+          applyReportTypeAccess(d.isAdmin ? [] : d.blockedReportTypes);
           if (!d.isAdmin) loadBalance();
           loadFiles();
-        })
-        .catch(() => (location.href = "/login.html"));
+        } else {
+          applyReportTypeAccess([]);
+        }
+      }
+
+      // Confirm session
+      fetch("/api/me")
+        .then((r) => (r.ok ? r.json() : Promise.reject()))
+        .then((d) => applyAuth(true, d))
+        .catch(() => applyAuth(false));
+
+      // 로그인 폼(드롭다운) 제출
+      document
+        .getElementById("loginForm")
+        ?.addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const err = document.getElementById("li_err");
+          err.style.display = "none";
+          const body = {
+            username: document.getElementById("li_username").value,
+            password: document.getElementById("li_password").value,
+            age14Confirmed: document.getElementById("li_age14").checked,
+            termsAccepted: document.getElementById("li_agree").checked,
+          };
+          if (!body.age14Confirmed || !body.termsAccepted) {
+            err.textContent = "만 14세 이상 확인과 약관 동의가 필요합니다.";
+            err.style.display = "block";
+            return;
+          }
+          const btn = document.getElementById("li_btn");
+          btn.disabled = true;
+          btn.textContent = "로그인 중...";
+          try {
+            const res = await fetch("/api/login", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "로그인 실패");
+            location.reload();
+          } catch (ex) {
+            err.textContent = ex.message;
+            err.style.display = "block";
+            btn.disabled = false;
+            btn.textContent = "로그인";
+          }
+        });
+
+      // 로그아웃 상태에서 보고서 종류를 누르면 로그인 드롭다운을 연다.
+      function openLoginDropdown() {
+        const dd = document.getElementById("loginDd");
+        if (!dd || dd.hidden) return false;
+        // 다음 틱에 연다 — 이 함수를 부른 클릭이 document 까지 버블링되며
+        // closeAll() 이 돌아 방금 연 드롭다운을 즉시 닫는 것을 피한다.
+        setTimeout(() => {
+          document
+            .querySelectorAll(".nav-dd.open")
+            .forEach((d) => d.classList.remove("open"));
+          dd.classList.add("open");
+          document.getElementById("navMenu")?.classList.add("open");
+          document.getElementById("li_username")?.focus();
+        }, 0);
+        return true;
+      }
+
+      // 히어로 '지금 시작하기': 로그아웃이면 로그인 드롭다운, 로그인이면 보고서 종류로.
+      document.getElementById("heroStart")?.addEventListener("click", () => {
+        if (document.body.dataset.auth === "out") {
+          openLoginDropdown();
+        } else {
+          document
+            .getElementById("reportTypes")
+            ?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      });
 
       async function loadBalance() {
         try {
@@ -661,15 +929,26 @@
           if (!r.ok) return;
           const b = await r.json();
           if (b.isAdmin) return; // admin은 잔액 X
-          const rate = b.krwPerUsd || 1400;
-          const preCount = b.preUnitUsd > 0 ? Math.floor(b.preUsd / b.preUnitUsd) : 0;
-          const resultCount = b.resultUnitUsd > 0 ? Math.floor(b.resultUsd / b.resultUnitUsd) : 0;
-          const preKrw = Math.round(b.preUsd * rate).toLocaleString();
-          const resultKrw = Math.round(b.resultUsd * rate).toLocaleString();
-          document.getElementById("balPre").textContent =
-            `사전 ${preCount}건 (₩${preKrw})`;
-          document.getElementById("balResult").textContent =
-            `결과 ${resultCount}건 (₩${resultKrw})`;
+          // 모델 제한 계정(예: 베타테스터): 허용 모델만 남기고 나머지 라디오 숨김
+          if (b.restrictedModel) {
+            document
+              .querySelectorAll(
+                'input[name="model"], input[name="crModel"], input[name="prModel"]',
+              )
+              .forEach((el) => {
+                const lbl = el.closest("label");
+                if (el.value !== b.restrictedModel) {
+                  el.checked = false;
+                  if (lbl) lbl.style.display = "none";
+                } else {
+                  el.checked = true;
+                }
+              });
+          }
+          const credits = Math.max(0, Math.trunc(Number(b.credits) || 0));
+          document.getElementById("balCredits").textContent = b.unlimited
+            ? "무제한 (베타)"
+            : `${credits} 크레딧`;
           document.getElementById("balanceBox").style.display = "flex";
           document.querySelector(".report-toolbar")?.classList.add("has-balance");
         } catch (_) {
@@ -769,7 +1048,7 @@
       document.getElementById("logout").addEventListener("click", async (e) => {
         e.preventDefault();
         await fetch("/api/logout", { method: "POST" });
-        location.href = "/login.html";
+        location.href = "/"; // 같은 페이지로 — 로그아웃 골격(로그인 드롭다운)으로 전환
       });
 
       // 상단 탭 전환
@@ -787,10 +1066,149 @@
           panel.hidden = !active;
         });
         if (tabName === "files") loadFiles();
+        if (tabName === "settings") loadUsage();
       }
       tabButtons.forEach((btn) => {
         btn.addEventListener("click", () => showTab(btn.dataset.tab));
       });
+
+      // ── 사용 내역 대시보드 ────────────────────────────────────────────────
+      function escapeHtml(s) {
+        return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+        })[c]);
+      }
+      function modelShortName(m) {
+        if (!m) return "";
+        if (m.indexOf("opus") >= 0) return "Opus";
+        if (m.indexOf("sonnet") >= 0) return "Sonnet";
+        return m;
+      }
+      async function loadUsage() {
+        const credEl = document.getElementById("usageCredits");
+        const genEl = document.getElementById("usageGen");
+        const recentEl = document.getElementById("usageRecent");
+        if (!credEl) return;
+        try {
+          const d = await fetch("/api/me/usage").then((r) => r.json());
+          if (d.isAdmin) credEl.textContent = "관리자 (무제한)";
+          else if (d.unlimited) credEl.textContent = "무제한";
+          else credEl.textContent = (d.credits ?? 0) + " 크레딧";
+          genEl.textContent = `${d.genCount ?? 0} / ${d.genLimit ?? 5} 건`;
+          const rDt = document.getElementById("usageRestrictDt");
+          const rDd = document.getElementById("usageRestrict");
+          if (d.restrictedModel) {
+            rDt.style.display = "";
+            rDd.style.display = "";
+            rDd.textContent = modelShortName(d.restrictedModel) + "만 사용 가능";
+          } else {
+            rDt.style.display = "none";
+            rDd.style.display = "none";
+          }
+          const list = Array.isArray(d.recent) ? d.recent : [];
+          if (!list.length) {
+            recentEl.innerHTML =
+              '<p class="hint">최근 생성 기록이 없습니다.</p>';
+            return;
+          }
+          const rows = list
+            .map((x) => {
+              const dt = x.date ? new Date(x.date) : null;
+              const when = dt
+                ? `${dt.getMonth() + 1}/${dt.getDate()} ${String(dt.getHours()).padStart(2, "0")}:${String(dt.getMinutes()).padStart(2, "0")}`
+                : "-";
+              const cr =
+                x.credits != null ? x.credits + "크레딧" : "베타·무료";
+              const md = x.model ? modelShortName(x.model) : "-";
+              return `<tr><td style="padding:4px 8px 4px 0;white-space:nowrap;color:var(--text-muted)">${when}</td><td style="padding:4px 8px 4px 0">${escapeHtml(x.label || "생성")}</td><td style="padding:4px 8px 4px 0">${md}</td><td style="padding:4px 0;white-space:nowrap">${cr}</td></tr>`;
+            })
+            .join("");
+          recentEl.innerHTML = `<table style="width:100%;border-collapse:collapse"><tbody>${rows}</tbody></table>`;
+        } catch (e) {
+          recentEl.innerHTML =
+            '<p class="hint">사용 내역을 불러오지 못했습니다.</p>';
+        }
+      }
+
+      // ── 상단 드롭다운 네비 ────────────────────────────────────────────────
+      (function initNav() {
+        const dds = Array.from(document.querySelectorAll(".nav-dd[data-dd]"));
+        const menu = document.getElementById("navMenu");
+        const closeAll = () => dds.forEach((d) => d.classList.remove("open"));
+
+        dds.forEach((dd) => {
+          const btn = dd.querySelector(".nav-dd-btn");
+          btn?.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const wasOpen = dd.classList.contains("open");
+            closeAll();
+            if (!wasOpen) dd.classList.add("open");
+          });
+        });
+        // 드롭다운 바깥을 클릭할 때만 닫는다. (로그인 폼 등 .nav-dd 내부 클릭은
+        // 닫지 않음 — 아이디·비번 입력하려다 창이 사라지던 문제 수정)
+        document.addEventListener("click", (e) => {
+          if (!e.target.closest(".nav-dd")) closeAll();
+        });
+
+        document.getElementById("navBurger")?.addEventListener("click", (e) => {
+          e.stopPropagation();
+          menu?.classList.toggle("open");
+        });
+
+        // 보고서 작성 드롭다운 → 보고서 종류 선택 + reports 탭으로
+        document.querySelectorAll(".nav-dd-menu a[data-report]").forEach((a) => {
+          a.addEventListener("click", (e) => {
+            e.preventDefault();
+            closeAll();
+            // 로그아웃 상태면 폼 대신 로그인 드롭다운을 연다.
+            if (document.body.dataset.auth === "out") {
+              if (typeof openLoginDropdown === "function") openLoginDropdown();
+              return;
+            }
+            const radio = document.querySelector(
+              `input[name="reportType"][value="${a.dataset.report}"]`,
+            );
+            if (radio) {
+              radio.checked = true;
+              updateReportTypeView();
+            }
+            showTab("reports");
+            menu?.classList.remove("open");
+            document
+              .getElementById("reportsPanel")
+              ?.scrollIntoView({ behavior: "smooth", block: "start" });
+          });
+        });
+
+        // 내 계정 드롭다운 → 탭 전환
+        document.querySelectorAll(".nav-dd-menu a[data-tab]").forEach((a) => {
+          a.addEventListener("click", (e) => {
+            e.preventDefault();
+            showTab(a.dataset.tab);
+            closeAll();
+            menu?.classList.remove("open");
+          });
+        });
+      })();
+
+      // 베타 메뉴 노출: 관리자 또는 지정 테스터에게만 'PDF 통번역(베타)' 표시
+      fetch("/api/me/beta")
+        .then((r) => (r.ok ? r.json() : { features: [] }))
+        .then((b) => {
+          if (
+            Array.isArray(b.features) &&
+            b.features.includes("pdf-translate")
+          ) {
+            const el = document.getElementById("navBetaTranslate");
+            if (el) el.hidden = false;
+          }
+        })
+        .catch(() => {});
 
       // Default to today
       document.getElementById("date").value = new Date().toISOString().slice(0, 10);
@@ -815,9 +1233,12 @@
         }
       }
 
+      const choosePrompt = document.getElementById("choosePrompt");
       function updateReportTypeView() {
-        const selected =
-          document.querySelector('input[name="reportType"]:checked')?.value || "chem-pre";
+        const checked = document.querySelector(
+          'input[name="reportType"]:checked',
+        );
+        const selected = checked ? checked.value : null;
         let matched = false;
 
         reportForms.forEach((formEl) => {
@@ -826,7 +1247,11 @@
           setVisible(formEl, active);
           matched = matched || active;
         });
-        setVisible(comingSoon, !matched);
+        // 아무 종류도 안 고르면 폼 대신 안내만(로그인 직후 홈 상태).
+        // 고른 종류에 폼이 없을 때만 '준비 중'.
+        if (choosePrompt) setVisible(choosePrompt, !selected);
+        setVisible(comingSoon, !!selected && !matched);
+        if (!selected) return;
 
         if (selected === "chem-result") {
           const crDate = document.getElementById("crDate");
@@ -840,7 +1265,17 @@
           }
         }
       }
-      reportTypeRadios.forEach((r) => r.addEventListener("change", updateReportTypeView));
+      reportTypeRadios.forEach((r) =>
+        r.addEventListener("change", () => {
+          // 로그아웃 상태면 선택을 취소하고 로그인 드롭다운을 연다.
+          if (document.body.dataset.auth === "out") {
+            r.checked = false;
+            if (typeof openLoginDropdown === "function") openLoginDropdown();
+            return;
+          }
+          updateReportTypeView();
+        }),
+      );
       updateReportTypeView();
 
       const form = document.getElementById("form");
@@ -980,6 +1415,78 @@
           profileBtn.disabled = false;
         }
       });
+
+      // ── 개인 설정: 기본 모델 · 양식 선호 (이 브라우저에 저장) ──────────────
+      (function () {
+        const modelSel = document.getElementById("prefModelSel");
+        const styleSel = document.getElementById("prefStyleSel");
+        const prefStatus = document.getElementById("prefSaveStatus");
+        if (!modelSel || !styleSel) return;
+        const PM = "prefModel",
+          PS = "prefStyle";
+        function getPref(k) {
+          try {
+            return localStorage.getItem(k) || "";
+          } catch (e) {
+            return "";
+          }
+        }
+        function setPref(k, v) {
+          try {
+            if (v) localStorage.setItem(k, v);
+            else localStorage.removeItem(k);
+          } catch (e) {}
+        }
+        // 선호값을 보고서 폼 라디오에 반영 (세 폼의 모델 + 화학 사전 양식)
+        function applyPrefsToForm() {
+          const pm = getPref(PM),
+            ps = getPref(PS);
+          if (pm) {
+            document
+              .querySelectorAll(
+                'input[name="model"],input[name="crModel"],input[name="prModel"]',
+              )
+              .forEach((r) => {
+                if (r.value === pm && !r.checked) {
+                  r.checked = true;
+                  r.dispatchEvent(new Event("change", { bubbles: true }));
+                }
+              });
+          }
+          if (ps) {
+            document.querySelectorAll('input[name="style"]').forEach((r) => {
+              if (r.value === ps && !r.checked) {
+                r.checked = true;
+                r.dispatchEvent(new Event("change", { bubbles: true }));
+              }
+            });
+          }
+        }
+        window.applyPrefsToForm = applyPrefsToForm;
+        // 초기화: 저장값으로 셀렉트 채우기
+        modelSel.value = getPref(PM);
+        styleSel.value = getPref(PS);
+        function flash(msg) {
+          if (!prefStatus) return;
+          prefStatus.style.color = "green";
+          prefStatus.textContent = msg;
+          setTimeout(() => {
+            prefStatus.textContent = "";
+          }, 1800);
+        }
+        modelSel.addEventListener("change", () => {
+          setPref(PM, modelSel.value);
+          applyPrefsToForm();
+          flash("기본 모델 저장됨");
+        });
+        styleSel.addEventListener("change", () => {
+          setPref(PS, styleSel.value);
+          applyPrefsToForm();
+          flash("기본 양식 저장됨");
+        });
+        // 페이지 로드 시 폼 라디오에 기본값 반영
+        applyPrefsToForm();
+      })();
 
       // ── 비밀번호 변경 ────────────────────────────────────────────────────
       const pwForm = document.getElementById("pwForm");
@@ -1182,11 +1689,11 @@
       }
 
       function getSelectedModel() {
-        // 현재 Sonnet 4.6 고정(hidden input). 라디오 노출 시 :checked 우선으로 동작.
+        // 모델 라디오에서 선택값 (없으면 기본 Opus 4.8).
         const el =
           document.querySelector('input[name="model"]:checked') ||
           document.querySelector('input[name="model"]');
-        return el ? el.value : "claude-sonnet-4-6";
+        return el ? el.value : "claude-opus-4-8";
       }
 
       function getModelLabel(modelId) {
@@ -1452,13 +1959,11 @@
         const photos = Array.from(document.getElementById("crPhotos").files);
         const manual = document.getElementById("crManual").files[0] || null;
 
-        // :checked 셀렉터는 hidden input을 매칭 못하므로,
-        // 라디오가 비활성(주석 처리)된 현재는 hidden input value를 fallback으로.
-        // Sonnet 복구 시: 라디오 주석 해제 + fallback을 "claude-sonnet-4-6"로.
+        // 모델 라디오에서 선택값 (없으면 기본 Opus 4.8).
         const crModel =
           document.querySelector('input[name="crModel"]:checked')?.value ||
           document.querySelector('input[name="crModel"]')?.value ||
-          "claude-sonnet-4-6";
+          "claude-opus-4-8";
         const modelLabel = getModelLabel(crModel);
         const crStyle =
           document.querySelector('input[name="crStyle"]:checked')?.value ||
@@ -1560,13 +2065,11 @@
           return;
         }
 
-        // :checked 셀렉터는 hidden input을 매칭 못하므로,
-        // 라디오가 비활성(주석 처리)된 현재는 hidden input value를 fallback으로.
-        // Sonnet 복구 시: 라디오 주석 해제 + fallback을 "claude-sonnet-4-6"로.
+        // 모델 라디오에서 선택값 (없으면 기본 Opus 4.8).
         const prModel =
           document.querySelector('input[name="prModel"]:checked')?.value ||
           document.querySelector('input[name="prModel"]')?.value ||
-          "claude-sonnet-4-6";
+          "claude-opus-4-8";
         const modelLabel = getModelLabel(prModel);
         const prFormat = getPhysResultFormat();
         updatePhysResultFontOptions();

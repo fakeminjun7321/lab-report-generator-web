@@ -451,37 +451,89 @@ def normalize_plain_physics_notation(text):
     return s
 
 
-def convert_sqrt_parentheses(expr):
+def convert_radicals(expr):
+    r"""Turn radicals into proper LaTeX ``\sqrt{...}`` so they render as a real
+    radical sign instead of literal text like ``sqrt(F/μ)``.
+
+    Handles the spelled-out name (``sqrt(...)``), the unicode symbol
+    (``√(...)``, ``√{...}``), a degree root (``sqrt[3]{x}`` -> ``\sqrt[3]{x}``)
+    and a bracketless single argument (``√2``, ``√g``). An existing LaTeX
+    ``\sqrt`` is left untouched, a radical glued to a preceding atom gets a
+    separating space (``a√b`` -> ``a \sqrt{b}``), and an unterminated radical is
+    left as a literal symbol rather than emitting a body-less ``\sqrt`` command.
+    """
+    # Normalise the spelled-out name to the symbol so there is one code path.
+    # ``(?<!\\)`` keeps an existing ``\sqrt`` command intact.
+    expr = re.sub(r"(?<!\\)\bsqrt\b", "√", expr, flags=re.IGNORECASE)
+    if "√" not in expr:
+        return expr
+    n = len(expr)
+    brackets = {"(": ")", "{": "}", "[": "]"}
+
+    def read_bracketed(start):
+        """``start`` indexes an opener; return (inner, index_after_close) or None
+        when the bracket is unbalanced."""
+        opener = expr[start]
+        closer = brackets[opener]
+        depth = 0
+        k = start
+        while k < n:
+            if expr[k] == opener:
+                depth += 1
+            elif expr[k] == closer:
+                depth -= 1
+                if depth == 0:
+                    return expr[start + 1:k], k + 1
+            k += 1
+        return None
+
     out = []
     i = 0
-    while i < len(expr):
+    while i < n:
         if expr[i] != "√":
             out.append(expr[i])
             i += 1
             continue
+        # Keep the radical keyword from fusing with a preceding atom in the
+        # converter's tokenizer (``a\sqrt`` would render as ``asqrt``).
+        prefix = " " if out and (out[-1].isalnum() or out[-1] in ")]}") else ""
         j = i + 1
-        while j < len(expr) and expr[j].isspace():
+        while j < n and expr[j].isspace():
             j += 1
-        if j >= len(expr) or expr[j] != "(":
-            out.append(r"\sqrt")
+        degree = None
+        if j < n and expr[j] == "[":
+            deg = read_bracketed(j)
+            if deg is not None:
+                degree, j = deg
+                while j < n and expr[j].isspace():
+                    j += 1
+        # Bracketed body: √(...), √{...}
+        if j < n and expr[j] in "({":
+            res = read_bracketed(j)
+            if res is not None:
+                body = rich_formula_to_latex(res[0])
+                root = f"[{degree.strip()}]" if degree is not None else ""
+                out.append(f"{prefix}\\sqrt{root}{{{body}}}")
+                i = res[1]
+                continue
+            # Unbalanced — fail safe: keep the literal symbol, never emit a
+            # body-less command that would leak into the document.
+            out.append("√")
             i += 1
             continue
-        depth = 0
-        k = j
-        while k < len(expr):
-            if expr[k] == "(":
-                depth += 1
-            elif expr[k] == ")":
-                depth -= 1
-                if depth == 0:
-                    inner = expr[j + 1:k]
-                    out.append(r"\sqrt{" + rich_formula_to_latex(inner) + "}")
-                    i = k + 1
-                    break
-            k += 1
-        else:
-            out.append(r"\sqrt")
-            i += 1
+        # Bracketless single atom: √2, √g, √x^{2}
+        atom = re.match(
+            r"([A-Za-zαβγδθλμπρστφωΩΔΣ0-9.]+(?:\^\{[^{}]*\}|\^[A-Za-z0-9])?)",
+            expr[j:],
+        )
+        if atom:
+            root = f"[{degree.strip()}]" if degree is not None else ""
+            out.append(f"{prefix}\\sqrt{root}{{{atom.group(1)}}}")
+            i = j + atom.end()
+            continue
+        # Nothing usable after the symbol — keep it literal (fail safe).
+        out.append("√")
+        i += 1
     return "".join(out)
 
 
@@ -510,11 +562,40 @@ def rich_formula_to_latex(expr):
     expr = expr.replace("≤", r" \leq ").replace("≥", r" \geq ")
     expr = expr.replace("½", r"\frac{1}{2}")
     expr = unicode_scripts_to_latex(expr)
-    expr = convert_sqrt_parentheses(expr) if "√" in expr else expr
+    expr = convert_radicals(expr)
     for greek, latex in GREEK_TO_LATEX.items():
         expr = expr.replace(greek, f" {latex} ")
     expr = re.sub(r"\s+", " ", expr).strip()
     return expr
+
+
+# A single "quantity = number unit" statement (e.g. ``v = 5 m/s``, ``T = 1.2 s``,
+# ``θ = 30°``) is a plain measurement, not an equation worth promoting to a
+# centered equation object. Requiring whitespace before a multi-letter unit keeps
+# real formulas like ``2gh`` (number glued to variables) out of this guard.
+_UNIT_TOKEN = (
+    r"[A-Za-zμΩ°Åℓ%]+"
+    r"(?:\s*/\s*[A-Za-zμΩ°Åℓ]+)?"
+    r"(?:\^?-?\d+|[²³¹⁰⁴⁵⁶⁷⁸⁹]+)?"
+)
+_TRIVIAL_MEASUREMENT_RE = re.compile(
+    r"^\s*[A-Za-zαβγδθλμπρστφωΩΔΣ]"
+    r"(?:_\{[A-Za-z0-9]+\}|_[A-Za-z0-9]|[₀₁₂₃₄₅₆₇₈₉])?"
+    r"\s*=\s*"
+    r"[-+]?\d+(?:\.\d+)?"
+    r"(?:\s*[-–~]\s*[-+]?\d+(?:\.\d+)?)?"
+    rf"(?:[°%]|\s+{_UNIT_TOKEN})?"
+    r"\s*$"
+)
+
+
+def is_trivial_measurement(expr):
+    """True for a bare ``symbol = number [unit]`` reading that should stay as
+    inline prose rather than become an equation object."""
+    s = re.sub(r"\*\*?([^*]+)\*\*?", r"\1", str(expr or "")).strip()
+    if s.count("=") != 1:
+        return False
+    return bool(_TRIVIAL_MEASUREMENT_RE.match(s))
 
 
 def is_probable_physics_formula(expr):
@@ -526,6 +607,8 @@ def is_probable_physics_formula(expr):
     if not re.search(r"[A-Za-zαβγδθλμπρστφωΩΔΣ]", clean):
         return False
     if not re.search(r"=|≈|≃|≤|≥", clean):
+        return False
+    if is_trivial_measurement(clean):
         return False
     return True
 

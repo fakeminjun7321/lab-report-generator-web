@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "postinstall": "python3 -m venv .venv && .venv/bin/pip install --upgrade pip && .venv/bin/pip install -r requirements.txt || echo 'WARN: python venv setup failed — hwpx output will be unavailable, docx still works'"
+    "postinstall": "(python3 -m venv .venv && .venv/bin/pip install --upgrade pip && .venv/bin/pip install -r requirements.txt || echo 'WARN: python venv setup failed — hwpx output will be unavailable, docx still works'); bash scripts/install-tectonic.sh || echo 'WARN: tectonic setup failed — re-typeset PDF unavailable'"
   },
   "engines": {
     "node": ">=18.0.0"

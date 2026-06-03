@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PDF 통번역 (베타) · Quilo</title>
+    <meta name="description" content="PDF 문서를 그림·레이아웃 그대로 두고 텍스트만 한국어로 통번역합니다. (관리자 테스트 중)" />
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("theme");
+          if (!t) t = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+          document.documentElement.setAttribute("data-theme", t);
+        } catch (e) {}
+      })();
+    </script>
+    <link rel="stylesheet" href="/style.css" />
+    <style>
+      .tr-wrap { max-width: 760px; margin: 0 auto; }
+      .tr-note { font-size: 13px; line-height: 1.6; }
+      .tr-note ul { margin: 8px 0 0; padding-left: 18px; }
+      .beta-badge {
+        display: inline-block; font-size: 11px; font-weight: 700;
+        padding: 2px 8px; border-radius: 999px; vertical-align: middle;
+        background: var(--accent, #2563eb); color: #fff; margin-left: 8px;
+      }
+      #gate { text-align: center; padding: 48px 16px; }
+    </style>
+  </head>
+  <body class="landing">
+    <div class="landing-bg" aria-hidden="true"></div>
+
+    <nav class="landing-nav">
+      <div class="landing-nav-inner">
+        <a href="/" class="brand">
+          <span class="brand-mark" aria-hidden="true">Q</span>
+          Quilo
+        </a>
+        <div class="landing-nav-actions">
+          <a href="/" class="nav-link">메인</a>
+          <a href="/tools/index.html" class="nav-link">도구 모음</a>
+          <button type="button" id="themeToggle" class="theme-toggle" aria-label="다크 모드로 전환" title="다크 모드로 전환">
+            <span class="theme-icon-light" aria-hidden="true">🌙</span>
+            <span class="theme-icon-dark" aria-hidden="true">☀️</span>
+          </button>
+        </div>
+      </div>
+    </nav>
+
+    <main class="landing-shell">
+      <section class="section" style="border-top: 0">
+        <div class="tr-wrap">
+          <div class="tool-page-head">
+            <h1>PDF 통번역 <span class="beta-badge">관리자 베타</span></h1>
+            <p>PDF를 올리면 <b>그림·표·레이아웃은 그대로 두고 텍스트만 한국어</b>로 바꿔 PDF로 돌려줍니다. 외부로 파일을 보내지 않고 서버에서만 처리합니다(Claude + PyMuPDF).</p>
+          </div>
+
+          <!-- 접근 게이트: 로그인/관리자 확인 후 도구 노출 -->
+          <div id="gate" class="card">
+            <p class="hint">권한 확인 중...</p>
+          </div>
+
+          <!-- 도구 본체 (관리자만 노출) -->
+          <div id="tool" style="display: none">
+            <form id="trForm" class="card">
+              <div class="field">
+                <span class="field-label">번역할 PDF <span class="req">*</span></span>
+                <div class="dropzone">
+                  <input id="trPdf" name="pdf" type="file" accept="application/pdf,.pdf" required aria-label="번역할 PDF" />
+                  <span class="dropzone-icon" aria-hidden="true">📄</span>
+                  <span class="dropzone-title">PDF를 끌어다 놓거나 클릭</span>
+                  <span class="dropzone-sub">일반 PDF · 스캔본/이미지 PDF 모두 지원 (스캔본은 자동 OCR)</span>
+                  <span class="dropzone-file" data-dz-file></span>
+                </div>
+              </div>
+
+              <div class="field">
+                <label>
+                  <span class="field-label">변환 방식</span>
+                  <select id="trMode" name="mode">
+                    <option value="auto" selected>자동 (권장) — PDF를 분석해 알맞은 방식을 자동 선택</option>
+                    <option value="inplace">빠른 번역 — 레이아웃·그림 그대로, 글자만 한국어 (일반 문서·매뉴얼)</option>
+                    <option value="retypeset">고품질 재조판 — 문서를 다시 조판, 수식 복원·스캔본 OCR (논문·문제집, PDF 새로 생성)</option>
+                  </select>
+                </label>
+                <p class="hint" id="trModeHint" style="margin:4px 0 0">PDF만 올리면 됩니다 — 스캔본·수식 많은 문서는 자동으로 ‘재조판’, 일반 문서는 ‘빠른 번역’으로 처리합니다. 원하면 직접 고를 수도 있어요.</p>
+              </div>
+
+              <div class="field">
+                <label>
+                  <span class="field-label">번역 모델</span>
+                  <select id="trModel" name="model">
+                    <option value="claude-opus-4-8" selected>Opus 4.8 — 최고 품질·수식 복원 (권장)</option>
+                    <option value="claude-sonnet-4-6">Sonnet 4.6 — 빠르고 저렴 (간단한 문서)</option>
+                  </select>
+                </label>
+              </div>
+
+              <div class="form-actions">
+                <button type="submit" id="trBtn" class="btn btn-primary btn-lg">한국어로 번역</button>
+              </div>
+              <p id="trError" class="form-error" style="display: none"></p>
+            </form>
+
+            <div class="card tr-note">
+              <b>잘 되는 것</b>
+              <ul>
+                <li>일반 문서: 레이아웃·그림 그대로 두고 글자만 한국어로(빠른 번역).</li>
+                <li>수식 많은 논문: 다시 조판하며 깨진 수식을 정준형으로 복원(재조판).</li>
+                <li>스캔본·이미지 PDF: 자동 OCR 후 재조판 — 원본 그림도 잘라 복원.</li>
+                <li>긴 문서는 구간을 나눠 병렬로 빠르게 처리합니다.</li>
+              </ul>
+              <b style="display:block;margin-top:10px">아직 안 되거나 제한되는 것</b>
+              <ul>
+                <li><b>스캔본은 약 30쪽까지</b> — 더 긴 스캔본은 앞부분만 처리됩니다.</li>
+                <li><b>텍스트 PDF에 박힌 그림</b>은 재조판 시 빠질 수 있습니다(스캔본은 그림 복원됨).</li>
+                <li><b>2단 등 복잡한 레이아웃</b>은 재조판에서 1단으로 재배치됩니다(원본 배치 그대로는 아님).</li>
+                <li><b>그래프·표가 이미지로 박힌 경우</b> 그 안의 글자·축 라벨은 번역되지 않습니다.</li>
+                <li>스캔본의 그림 <b>위치</b>가 가끔 살짝 어긋날 수 있습니다.</li>
+                <li><b>손글씨, 암호 걸린 PDF, 한국어 외 다른 언어로의 번역</b>은 지원하지 않습니다.</li>
+              </ul>
+              <p class="hint" style="margin:8px 0 0">결과물은 24시간 동안 다시 내려받을 수 있습니다(이 기기 기준).</p>
+            </div>
+
+            <div id="progressArea" style="display: none">
+              <div class="status-head">
+                <span class="spinner" id="genSpinner" aria-hidden="true"></span>
+                <h2 id="statusTitle">번역 중...</h2>
+                <button type="button" id="stopBtn" class="stop-btn" style="display: none">중지</button>
+              </div>
+              <pre id="progress"></pre>
+              <div id="resultArea"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-links">
+        <a href="/">메인</a>
+        <a href="/tools/index.html">도구 모음</a>
+        <a href="/guide.html">이용 가이드</a>
+      </div>
+      <div class="footer-copy">© 2026 Quilo · MIT License</div>
+    </footer>
+
+    <script src="/theme.js"></script>
+    <script>
+      const gate = document.getElementById("gate");
+      const tool = document.getElementById("tool");
+
+      // 접근 게이트: 로그인 + (관리자 또는 'pdf-translate' 베타 테스터)
+      (async function guard() {
+        try {
+          const res = await fetch("/api/me");
+          if (res.status === 401) {
+            gate.innerHTML =
+              '<p class="hint">로그인이 필요합니다.</p><p style="margin-top:12px"><a class="btn btn-primary" href="/login.html">로그인</a></p>';
+            return;
+          }
+          const me = await res.json();
+          let allowed = !!me.isAdmin;
+          let betaInfo = null;
+          if (!allowed) {
+            try {
+              const b = await fetch("/api/me/beta").then((r) => r.json());
+              betaInfo = b;
+              allowed =
+                Array.isArray(b.features) && b.features.includes("pdf-translate");
+            } catch {}
+          }
+          if (!allowed) {
+            gate.innerHTML =
+              '<p class="hint">이 기능은 현재 <b>베타 테스터에게만</b> 열려 있습니다. 사용을 원하면 운영자에게 요청하세요.</p>';
+            return;
+          }
+          gate.style.display = "none";
+          tool.style.display = "block";
+          // 비관리자 테스터: 오늘 남은 베타 사용량 표시
+          if (!me.isAdmin && betaInfo && Array.isArray(betaInfo.usage)) {
+            const u = betaInfo.usage.find((x) => x.key === "pdf-translate");
+            if (u && u.limit > 0) {
+              const left = Math.max(0, u.limit - u.used);
+              tool.insertAdjacentHTML(
+                "afterbegin",
+                `<p class="hint" style="margin:0 0 12px">오늘 사용 가능: <b>${left}/${u.limit}</b>회 (베타 한도)</p>`,
+              );
+            }
+          }
+          initTool();
+        } catch (e) {
+          gate.innerHTML = '<p class="hint">권한 확인 중 오류가 발생했습니다.</p>';
+        }
+      })();
+
+      function initTool() {
+        // 변환 방식에 따라 안내문 + 권장 모델 갱신
+        const modeSel = document.getElementById("trMode");
+        const modeHint = document.getElementById("trModeHint");
+        const modelSel = document.getElementById("trModel");
+        const MODE_HINTS = {
+          auto: "PDF만 올리면 됩니다 — 스캔본·수식 많은 문서는 자동으로 ‘재조판’, 일반 문서는 ‘빠른 번역’으로 처리합니다. 원하면 직접 고를 수도 있어요.",
+          retypeset:
+            "문서를 한국어로 다시 조판하고 수식을 복원해 새 PDF를 만듭니다. 스캔본·이미지 PDF도 이 방식(OCR)으로 처리되며 원본 그림도 복원합니다. 기본 Sonnet으로 빠르게 — 수식이 아주 복잡한 논문만 Opus를 고르세요(느림).",
+          inplace:
+            "레이아웃을 그대로 두고 글자만 바꿉니다. 텍스트 레이어가 있는 일반 문서에 적합합니다.",
+        };
+        modeSel?.addEventListener("change", () => {
+          modeHint.textContent = MODE_HINTS[modeSel.value] || MODE_HINTS.auto;
+          // 모델은 강제하지 않음 — 속도를 위해 기본 Sonnet 유지(사용자가 직접 Opus 선택 가능)
+        });
+
+        const form = document.getElementById("trForm");
+        const btn = document.getElementById("trBtn");
+        const stopBtn = document.getElementById("stopBtn");
+        const errEl = document.getElementById("trError");
+        const progressArea = document.getElementById("progressArea");
+        const progressEl = document.getElementById("progress");
+        const resultArea = document.getElementById("resultArea");
+        const statusTitle = document.getElementById("statusTitle");
+        const genSpinner = document.getElementById("genSpinner");
+        const fileInput = document.getElementById("trPdf");
+        let currentJobId = null;
+        let currentEs = null;
+
+        // 드롭존: 파일명 표시 + 드래그 하이라이트 (index.html 과 동일 동작)
+        document.querySelectorAll(".dropzone").forEach((dz) => {
+          const input = dz.querySelector('input[type="file"]');
+          if (!input || dz.dataset.dzInit) return;
+          dz.dataset.dzInit = "1";
+          const fileEl = dz.querySelector("[data-dz-file]");
+          const render = () => {
+            if (input.files && input.files.length) {
+              dz.classList.add("is-filled");
+              if (fileEl) fileEl.textContent = input.files[0].name;
+            } else {
+              dz.classList.remove("is-filled");
+              if (fileEl) fileEl.textContent = "";
+            }
+          };
+          input.addEventListener("change", render);
+          ["dragenter", "dragover"].forEach((ev) =>
+            dz.addEventListener(ev, (e) => {
+              e.preventDefault();
+              dz.classList.add("is-dragover");
+            }),
+          );
+          ["dragleave", "drop"].forEach((ev) =>
+            dz.addEventListener(ev, () => dz.classList.remove("is-dragover")),
+          );
+          dz.addEventListener("drop", (e) => {
+            e.preventDefault();
+            if (e.dataTransfer && e.dataTransfer.files.length) {
+              input.files = e.dataTransfer.files;
+              render();
+            }
+          });
+        });
+
+        function appendLine(text) {
+          progressEl.textContent += text + "\n";
+          progressEl.scrollTop = progressEl.scrollHeight;
+        }
+
+        function setBusy(busy) {
+          btn.disabled = busy;
+          fileInput.disabled = busy;
+          btn.textContent = busy ? "번역 중..." : "한국어로 번역";
+          genSpinner.style.display = busy ? "inline-block" : "none";
+          stopBtn.style.display = busy ? "inline-block" : "none";
+        }
+
+        form.addEventListener("submit", async (e) => {
+          e.preventDefault();
+          errEl.style.display = "none";
+          if (!fileInput.files || !fileInput.files.length) {
+            errEl.textContent = "PDF 파일을 선택하세요.";
+            errEl.style.display = "block";
+            return;
+          }
+
+          const fd = new FormData();
+          fd.append("pdf", fileInput.files[0]);
+          fd.append("model", document.getElementById("trModel").value);
+          fd.append("mode", document.getElementById("trMode").value);
+
+          progressArea.style.display = "block";
+          progressEl.textContent = "";
+          resultArea.innerHTML = "";
+          statusTitle.textContent = "번역 중...";
+          setBusy(true);
+
+          try {
+            const res = await fetch("/api/translate-pdf", {
+              method: "POST",
+              body: fd,
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "요청 실패");
+            currentJobId = data.jobId;
+            streamJob(data.jobId);
+          } catch (err) {
+            appendLine("오류: " + err.message);
+            statusTitle.textContent = "오류";
+            setBusy(false);
+          }
+        });
+
+        stopBtn.addEventListener("click", async () => {
+          if (!currentJobId) return;
+          stopBtn.textContent = "중지 중...";
+          try {
+            await fetch(`/api/jobs/${currentJobId}/abort`, { method: "POST" });
+          } catch (e) {}
+        });
+
+        function streamJob(jobId) {
+          const es = new EventSource(`/api/jobs/${jobId}/stream`);
+          currentEs = es;
+
+          es.addEventListener("progress", (e) => {
+            appendLine(JSON.parse(e.data));
+          });
+
+          es.addEventListener("done", (e) => {
+            const data = JSON.parse(e.data);
+            statusTitle.textContent = "완료 ✓";
+            const link = document.createElement("a");
+            link.href = `/api/jobs/${jobId}/download`;
+            link.textContent = `📥 ${data.filename} 다운로드`;
+            link.download = data.filename;
+            link.className = "btn btn-primary";
+            resultArea.appendChild(link);
+            es.close();
+            setBusy(false);
+            stopBtn.textContent = "중지";
+          });
+
+          es.addEventListener("error", (e) => {
+            const msg = e.data
+              ? JSON.parse(e.data)
+              : "서버 연결이 끊겼습니다. 잠시 후 다시 시도하세요.";
+            appendLine("오류: " + msg);
+            statusTitle.textContent = "오류";
+            es.close();
+            setBusy(false);
+            stopBtn.textContent = "중지";
+          });
+        }
+      }
+    </script>
+  </body>
+</html>

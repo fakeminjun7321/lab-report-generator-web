@@ -10,6 +10,7 @@ tmp/
 __pycache__/
 *.pyc
 .venv/
+bin/
 xcuserdata/
 *.xcuserstate
 .claude/

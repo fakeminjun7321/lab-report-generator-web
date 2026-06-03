@@ -5,7 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>HWPX LaTeX → 한글 수식 변환기</title>
 <meta name="description" content="HWPX 문서 안의 LaTeX 수식($...$, $$...$$, \(...\), \[...\])만 한글(HWP) 수식 개체로 바꿔 줍니다. 모든 처리는 브라우저에서 이루어지며 파일은 외부로 전송되지 않습니다." />
+<script>
+  // 파일 변환기 탭 안 iframe(?embed=1)일 때 자체 상단바/푸터 숨김
+  if (new URLSearchParams(location.search).has("embed"))
+    document.documentElement.classList.add("embed");
+</script>
 <style>
+  html.embed .site-topbar,
+  html.embed footer { display: none !important; }
+  html.embed .wrap { padding-top: 12px !important; }
   :root {
     --bg: #f6f7f9;
     --card: #ffffff;
@@ -119,8 +127,8 @@
 <div class="site-topbar" style="border-bottom:1px solid var(--line);background:var(--card)">
   <div style="max-width:720px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;gap:10px">
     <a href="/" style="display:inline-flex;align-items:center;gap:8px;color:var(--ink);text-decoration:none;font-weight:800;letter-spacing:-.01em">
-      <span style="display:grid;place-items:center;width:26px;height:26px;border-radius:8px;background:var(--brand);color:#fff;font-weight:800;font-size:14px">R</span>
-      보고서 작성 툴
+      <span style="display:grid;place-items:center;width:26px;height:26px;border-radius:8px;background:var(--brand);color:#fff;font-weight:800;font-size:14px">Q</span>
+      Quilo
     </a>
     <a href="/" style="margin-left:auto;color:var(--muted);text-decoration:none;font-size:.9rem">← 메인으로</a>
   </div>

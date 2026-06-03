@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>파일 변환기 — 보고서 도구</title>
-    <meta name="description" content="표(Excel↔CSV↔TSV), 이미지→PDF, PDF→이미지, 이미지 형식 변환을 브라우저 안에서 처리하는 파일 변환기." />
+    <meta name="description" content="표(Excel↔CSV↔TSV), 이미지·PDF 변환, PDF 병합·분할·추출·삭제·정렬·회전·페이지번호·워터마크·여백자르기·압축, LaTeX 수식 변환을 브라우저 안에서 처리하는 파일 변환기." />
     <script>
       (function () {
         try {
@@ -27,13 +27,82 @@
       .drop-z .sub { font-size: 13px; margin-top: 4px; }
       .panel { display: none; gap: 16px; }
       .panel.on { display: grid; }
+      /* 상위 탭(파일·표 / 이미지 / PDF병합 / 수식) */
+      .conv-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 16px;
+      }
+      .conv-tabs button {
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--text-muted);
+        font-weight: 700;
+        font-size: 14px;
+        padding: 9px 16px;
+        border-radius: 999px;
+        cursor: pointer;
+      }
+      .conv-tabs button:hover { background: var(--surface-2); color: var(--text); }
+      .conv-tabs button.on {
+        background: var(--accent);
+        color: var(--on-accent);
+        border-color: var(--accent);
+      }
+      .conv-panel { display: none; }
+      .conv-panel.on { display: block; }
+      .conv-frame {
+        width: 100%;
+        height: 78vh;
+        min-height: 560px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface);
+      }
+      /* PDF 도구 카드 그리드 (iLovePDF 식) */
+      .pdf-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+        gap: 12px;
+      }
+      .pdf-tile {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+        text-align: left;
+        padding: 16px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface);
+        cursor: pointer;
+        font: inherit;
+        transition: border-color 0.12s, transform 0.12s, box-shadow 0.12s;
+      }
+      .pdf-tile:hover {
+        border-color: var(--accent);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+      }
+      .pdf-tile-ic { font-size: 26px; line-height: 1; }
+      .pdf-tile-t { font-weight: 750; font-size: 15px; color: var(--text); }
+      .pdf-tile-d { font-size: 12.5px; color: var(--text-muted); }
+      .pdf-view-head {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 12px;
+        flex-wrap: wrap;
+      }
+      .pdf-view-head h2 { margin: 0; font-size: 18px; }
     </style>
   </head>
   <body class="landing">
     <div class="landing-bg" aria-hidden="true"></div>
     <nav class="landing-nav">
       <div class="landing-nav-inner">
-        <a href="/" class="brand"><span class="brand-mark" aria-hidden="true">R</span> 보고서 작성 툴</a>
+        <a href="/" class="brand"><span class="brand-mark" aria-hidden="true">Q</span> Quilo</a>
         <div class="landing-nav-actions">
           <a href="/tools/index.html" class="nav-link">← 도구 모음</a>
           <button type="button" id="themeToggle" class="theme-toggle" aria-label="다크 모드로 전환" title="다크 모드로 전환">
@@ -48,9 +117,17 @@
       <section class="section" style="border-top:0">
         <div class="tool-page-head">
           <h1>파일 변환기</h1>
-          <p>표·이미지·PDF 형식을 서로 변환합니다. 모든 처리는 브라우저 안에서만 이뤄지고 파일은 서버로 전송되지 않습니다.</p>
+          <p>표·이미지·PDF·수식을 한 곳에서 변환합니다. 파일·이미지·PDF는 브라우저 안에서, 수식 변환은 우리 서버에서 처리합니다.</p>
         </div>
 
+        <div class="conv-tabs" id="convTabs" role="tablist">
+          <button class="on" type="button" data-tab="file">파일 · 표 변환</button>
+          <button type="button" data-tab="image">이미지 변환 · 압축</button>
+          <button type="button" data-tab="pdf">PDF 도구</button>
+          <button type="button" data-tab="equation">수식 변환 (LaTeX→한글)</button>
+        </div>
+
+        <div class="conv-panel on" data-panel="file">
         <div class="tool-card">
           <div class="mode-tabs" id="modeTabs">
             <button data-m="table" class="on">표 (Excel ↔ CSV ↔ TSV)</button>
@@ -101,6 +178,79 @@
 
           <p class="hint" id="cvMsg" style="margin:0"></p>
         </div>
+        </div>
+
+        <div class="conv-panel" data-panel="image">
+          <iframe class="conv-frame" data-src="/tools/image.html?embed=1" title="이미지 변환·압축"></iframe>
+        </div>
+
+        <div class="conv-panel" data-panel="pdf">
+          <!-- 도구 카드 그리드 -->
+          <div id="pdfGrid" class="pdf-grid">
+            <button class="pdf-tile" type="button" data-tool="pdf-merge" data-title="PDF 병합">
+              <span class="pdf-tile-ic" aria-hidden="true">🔗</span>
+              <span class="pdf-tile-t">PDF 병합</span>
+              <span class="pdf-tile-d">여러 PDF를 하나로</span>
+            </button>
+            <button class="pdf-tile" type="button" data-tool="pdf-split" data-title="PDF 분할">
+              <span class="pdf-tile-ic" aria-hidden="true">✂️</span>
+              <span class="pdf-tile-t">PDF 분할</span>
+              <span class="pdf-tile-d">N쪽마다 · 범위로 나누기</span>
+            </button>
+            <button class="pdf-tile" type="button" data-tool="pdf-extract" data-title="페이지 추출">
+              <span class="pdf-tile-ic" aria-hidden="true">📄</span>
+              <span class="pdf-tile-t">페이지 추출</span>
+              <span class="pdf-tile-d">원하는 페이지만 새 PDF로</span>
+            </button>
+            <button class="pdf-tile" type="button" data-tool="pdf-remove" data-title="페이지 삭제">
+              <span class="pdf-tile-ic" aria-hidden="true">🗑️</span>
+              <span class="pdf-tile-t">페이지 삭제</span>
+              <span class="pdf-tile-d">특정 페이지를 제거</span>
+            </button>
+            <button class="pdf-tile" type="button" data-tool="pdf-organize" data-title="페이지 정렬">
+              <span class="pdf-tile-ic" aria-hidden="true">🔀</span>
+              <span class="pdf-tile-t">페이지 정렬</span>
+              <span class="pdf-tile-d">순서 변경 · 삭제</span>
+            </button>
+            <button class="pdf-tile" type="button" data-tool="pdf-rotate" data-title="PDF 회전">
+              <span class="pdf-tile-ic" aria-hidden="true">🔄</span>
+              <span class="pdf-tile-t">PDF 회전</span>
+              <span class="pdf-tile-d">90 · 180 · 270도 회전</span>
+            </button>
+            <button class="pdf-tile" type="button" data-tool="pdf-pagenum" data-title="페이지 번호">
+              <span class="pdf-tile-ic" aria-hidden="true">#️⃣</span>
+              <span class="pdf-tile-t">페이지 번호</span>
+              <span class="pdf-tile-d">쪽번호 새기기</span>
+            </button>
+            <button class="pdf-tile" type="button" data-tool="pdf-watermark" data-title="워터마크">
+              <span class="pdf-tile-ic" aria-hidden="true">💧</span>
+              <span class="pdf-tile-t">워터마크</span>
+              <span class="pdf-tile-d">텍스트 워터마크 추가</span>
+            </button>
+            <button class="pdf-tile" type="button" data-tool="pdf-crop" data-title="여백 자르기">
+              <span class="pdf-tile-ic" aria-hidden="true">📐</span>
+              <span class="pdf-tile-t">여백 자르기</span>
+              <span class="pdf-tile-d">상하좌우 여백 잘라내기</span>
+            </button>
+            <button class="pdf-tile" type="button" data-tool="pdf-compress" data-title="PDF 압축">
+              <span class="pdf-tile-ic" aria-hidden="true">🗜️</span>
+              <span class="pdf-tile-t">PDF 압축</span>
+              <span class="pdf-tile-d">용량 줄이기</span>
+            </button>
+          </div>
+          <!-- 선택한 도구 화면 -->
+          <div id="pdfView" style="display:none">
+            <div class="pdf-view-head">
+              <button id="pdfBack" class="btn-ghost" type="button">← PDF 도구 목록</button>
+              <h2 id="pdfViewTitle"></h2>
+            </div>
+            <iframe id="pdfFrame" class="conv-frame" title="PDF 도구"></iframe>
+          </div>
+        </div>
+
+        <div class="conv-panel" data-panel="equation">
+          <iframe class="conv-frame" data-src="/equation/index.html?embed=1" title="수식 변환"></iframe>
+        </div>
       </section>
     </main>
 
@@ -111,10 +261,55 @@
         <a href="/guide.html">이용 가이드</a>
         <a href="https://blog.naver.com/physicjun1905" target="_blank" rel="noopener">블로그</a>
       </div>
-      <div class="footer-copy">© 2026 Lab Report Generator Web · MIT License · SheetJS(Apache-2.0) · pdf-lib(MIT) · pdf.js(Apache-2.0)</div>
+      <div class="footer-copy">© 2026 Quilo · MIT License · SheetJS(Apache-2.0) · pdf-lib(MIT) · pdf.js(Apache-2.0) · JSZip(MIT)</div>
     </footer>
 
     <script src="/theme.js"></script>
+    <script>
+      // 상위 탭 전환 + iframe 지연 로드(처음 누를 때만 src 설정)
+      (function () {
+        const tabs = document.querySelectorAll("#convTabs button[data-tab]");
+        const panels = document.querySelectorAll(".conv-panel[data-panel]");
+        tabs.forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const t = btn.dataset.tab;
+            tabs.forEach((b) => b.classList.toggle("on", b === btn));
+            panels.forEach((p) => p.classList.toggle("on", p.dataset.panel === t));
+            const frame = document
+              .querySelector(`.conv-panel[data-panel="${t}"]`)
+              ?.querySelector("iframe.conv-frame[data-src]");
+            if (frame && !frame.src && frame.dataset.src)
+              frame.src = frame.dataset.src;
+          });
+        });
+      })();
+    </script>
+    <script>
+      // PDF 도구 그리드: 카드 클릭 → 해당 도구를 iframe(embed)로 열기, 뒤로가기로 목록 복귀
+      (function () {
+        const grid = document.getElementById("pdfGrid");
+        const view = document.getElementById("pdfView");
+        const frame = document.getElementById("pdfFrame");
+        const title = document.getElementById("pdfViewTitle");
+        const back = document.getElementById("pdfBack");
+        if (!grid || !view || !frame) return;
+        grid.addEventListener("click", function (e) {
+          const tile = e.target.closest(".pdf-tile[data-tool]");
+          if (!tile) return;
+          const tool = tile.dataset.tool;
+          frame.src = "/tools/" + tool + ".html?embed=1";
+          frame.title = tile.dataset.title || "PDF 도구";
+          title.textContent = tile.dataset.title || "";
+          grid.style.display = "none";
+          view.style.display = "block";
+        });
+        back.addEventListener("click", function () {
+          view.style.display = "none";
+          grid.style.display = "grid";
+          frame.removeAttribute("src"); // 메모리 정리(다시 누르면 새로 로드)
+        });
+      })();
+    </script>
     <script>
       (function () {
         var msg = document.getElementById("cvMsg");
