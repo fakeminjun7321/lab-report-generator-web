@@ -196,10 +196,12 @@ const {
 const { getVersionInfo } = require("./lib/version-info");
 const { translatePdf } = require("./lib/pipelines/pdf-translate/translate");
 const { retypesetPdf } = require("./lib/pipelines/pdf-translate/latex-gen");
+const { convertDocxToHwpx } = require("./lib/pipelines/docx-to-hwpx");
 const {
   analyzePdf,
   rasterizePages,
   splitPdf,
+  extractFigures,
 } = require("./lib/pipelines/pdf-translate/pdf-tool");
 const {
   prepareImageForAnthropic,
@@ -533,19 +535,10 @@ app.post("/api/login", async (req, res) => {
   }
   rateLimit.recordLoginAttempt(ip);
 
-  const { username, password, age14Confirmed, termsAccepted } = req.body || {};
+  // 만 14세·약관 동의는 회원가입(/api/signup)에서만 받는다. 로그인은 기존 사용자라 불필요.
+  const { username, password } = req.body || {};
   if (!username || !password) {
     return res.status(400).json({ error: "이름과 비밀번호를 입력하세요." });
-  }
-  if (!age14Confirmed) {
-    return res
-      .status(403)
-      .json({ error: "만 14세 이상인 경우에만 이용할 수 있습니다." });
-  }
-  if (!termsAccepted) {
-    return res
-      .status(403)
-      .json({ error: "이용약관과 개인정보처리방침에 동의해야 합니다." });
   }
   const name = String(username).trim().slice(0, 50);
 
@@ -560,6 +553,12 @@ app.post("/api/login", async (req, res) => {
   try {
     const user = await supa.authenticate(name, password);
     if (!user) {
+      supa.recordLogin({
+        userName: name,
+        ip,
+        userAgent: req.get("user-agent"),
+        success: false,
+      });
       return res.status(401).json({ error: "이름 또는 비밀번호가 틀렸습니다." });
     }
     req.session.userInfo = {
@@ -570,6 +569,19 @@ app.post("/api/login", async (req, res) => {
       unlimited: !!user.unlimited,
       restrictedModel: user.restricted_model || null,
     };
+    // 로그인 유지: 체크 시 30일 지속 쿠키, 아니면 브라우저/앱 세션 한정
+    if (req.body && req.body.remember) {
+      req.session.cookie.maxAge = 1000 * 60 * 60 * 24 * 30; // 30일
+    } else {
+      req.session.cookie.expires = false; // 세션 쿠키(닫으면 만료)
+    }
+    supa.recordLogin({
+      userId: user.id,
+      userName: user.name,
+      ip,
+      userAgent: req.get("user-agent"),
+      success: true,
+    });
     console.log(`[login] ${user.name} (admin=${user.is_admin})`);
     return res.json({
       ok: true,
@@ -696,6 +708,452 @@ app.get("/api/me", async (req, res) => {
     studentId,
     blockedReportTypes,
   });
+});
+
+// ── AI 도우미 챗 (OpenAI 호환 오픈모델 API; 기본 Groq, 무로그인, 사이트 사용법 안내) ──
+const CHAT_API_KEY = process.env.CHAT_API_KEY || "";
+const CHAT_API_BASE = (
+  process.env.CHAT_API_BASE || "https://api.groq.com/openai/v1"
+).replace(/\/+$/, "");
+const CHAT_MODEL = process.env.CHAT_MODEL || "llama-3.3-70b-versatile";
+const CHAT_MAX_TOKENS = parseInt(process.env.CHAT_MAX_TOKENS || "700", 10);
+const CHAT_DAILY_MAX = parseInt(process.env.CHAT_DAILY_MAX || "1500", 10);
+const CHAT_SYSTEM = `당신은 "Quilo" 사이트의 한국어 도우미입니다. Quilo는 학생의 실험 보고서 작성을 돕는 학습 보조 서비스입니다.
+
+[Quilo가 하는 일]
+- 보고서 초안 생성: 화학 사전보고서, 화학 결과보고서, 물리 결과보고서 (.docx 또는 .hwpx).
+  · 사전보고서 = 실험 전 (목표·이론적 배경·기구/시약·실험 과정). 입력: 실험 매뉴얼 PDF.
+  · 결과보고서 = 실험 후 (데이터 표·그래프·분석·결론·오차). 입력: 화학은 사전보고서 PDF + 데이터(엑셀/CSV/사진) + 실험 사진(+매뉴얼), 물리는 PASCO Capstone(.cap)/엑셀/CSV/매뉴얼/사진.
+- PDF 통번역(베타): 그림·표·레이아웃은 두고 텍스트만 한국어로.
+- 도구 모음: 글자수 세기, LaTeX 수식 변환, 선형회귀·그래프, 이미지 변환·압축, PDF 도구(병합/분할/회전 등).
+- 데스크톱 앱(Quilo, Mac/Windows) 다운로드: https://fakeminjun7321.github.io/quilo-app/
+
+[크레딧] 보고서 1건당 모델만큼 차감: Opus 4.8 = 3크레딧, Sonnet 4.6 = 1크레딧. 신규 계정은 0크레딧이라 운영자 충전 후 사용.
+
+[자주 묻는 것]
+- .hwpx는 한컴오피스/한글에서, .docx는 MS Word(또는 한글)에서 열립니다.
+- 생성/업로드 파일은 24시간만 보관. 본인이 권한을 가진 파일만 업로드.
+- 로그인/회원가입은 우측 상단 메뉴. 학번은 개인 설정에서.
+
+[답변 규칙]
+- 한국어로 짧고 친절하게. 단계가 필요하면 번호로.
+- 범위는 Quilo 사용법과 실험 보고서 작성 안내까지. 그 외 요청(일반 지식 문답, 코딩, 숙제 대신 풀이, 보고서 본문 통째 대필 등)은 정중히 거절하고 Quilo 기능으로 안내.
+- 생성 결과는 AI라 부정확할 수 있으니 필요할 때 "직접 검토·수정하고 학교/교사의 AI 사용 정책을 확인한 뒤 쓰세요, 그대로 제출하지 마세요"라고 안내.
+- 모르거나 계정/결제/오류 등 운영자 영역이면 추측하지 말고 "운영자 문의 / 건의사항"을 안내.
+- 서비스 이름은 항상 "Quilo"로 표기하세요. '퀄로'·'퀼로'처럼 한글로 풀어쓰지 마세요.`;
+
+// 메모 작성 도우미(더 무거운 모델). 보고서 입력칸의 'AI 참고 메모' 초안을 돕는다.
+const CHAT_MEMO_MODEL = process.env.CHAT_MEMO_MODEL || "openai/gpt-oss-120b";
+const CHAT_MEMO_MAX_TOKENS = parseInt(
+  process.env.CHAT_MEMO_MAX_TOKENS || "1200",
+  10,
+);
+const CHAT_MEMO_SYSTEM = `당신은 "Quilo"의 '실험 메모 작성 도우미'입니다. 사용자가 실험 보고서 생성에 넣을 'AI 참고 메모(실험자 의견)' 초안을 함께 만듭니다.
+
+[역할]
+- 사용자가 말한 실제 실험 내용·관찰·측정값·느낀 점을 바탕으로 보고서에 참고가 될 메모를 한국어로 깔끔히 정리·문장화합니다.
+- 정보가 부족하면 먼저 1~3개의 짧은 질문으로 물어봅니다(무엇을 측정했는지, 어떤 경향이었는지, 특이사항이나 오차로 의심되는 점 등).
+- 메모가 정리되면 마지막에 "메모 초안:" 으로 시작하는 최종본을 제시합니다(보고서 입력칸에 붙여넣기 좋게).
+
+[절대 규칙]
+- 사용자가 말하지 않은 수치·결과·오차 원인·결론을 지어내지 마세요. 가정이 필요하면 "가정"임을 밝히거나 사용자에게 물어보세요.
+- 보고서 본문을 통째로 대필하지 말고 '참고 메모(요점)' 수준으로만 도와주세요.
+- 데이터 조작·허위 작성은 학업 부정행위입니다. 본인의 실제 실험을 정리하는 것만 돕습니다.
+- 한국어로 간결하게.`;
+
+app.get("/api/chat/status", (req, res) => {
+  res.json({ enabled: !!CHAT_API_KEY });
+});
+
+app.post("/api/chat", async (req, res) => {
+  if (!CHAT_API_KEY) {
+    return res.status(503).json({ error: "AI 도우미가 아직 준비 중입니다." });
+  }
+  const ip = req.ip || "unknown";
+  const lim = rateLimit.checkChatLimit(ip, CHAT_DAILY_MAX);
+  if (!lim.allowed) {
+    return res.status(429).json({
+      error:
+        lim.reason === "rate"
+          ? "잠시 후 다시 시도해 주세요 (요청이 너무 빠릅니다)."
+          : "오늘 사용량이 많습니다. 잠시 후 다시 시도해 주세요.",
+    });
+  }
+
+  // 최근 대화만, 길이 제한
+  const raw = Array.isArray(req.body && req.body.messages)
+    ? req.body.messages
+    : [];
+  const turns = raw
+    .filter(
+      (m) =>
+        m &&
+        (m.role === "user" || m.role === "assistant") &&
+        typeof m.content === "string" &&
+        m.content.trim(),
+    )
+    .slice(-8)
+    .map((m) => ({ role: m.role, content: m.content.slice(0, 2000) }));
+  if (!turns.length || turns[turns.length - 1].role !== "user") {
+    return res.status(400).json({ error: "메시지가 비어 있습니다." });
+  }
+
+  rateLimit.recordChatAttempt(ip);
+
+  // 모드: memo = 메모 작성 도우미(무거운 모델 + 메모 전용 프롬프트), 그 외 = 사용법 도우미
+  const memoMode = (req.body && req.body.mode) === "memo";
+  const ctx =
+    !memoMode && req.body && typeof req.body.context === "string"
+      ? req.body.context.slice(0, 300).replace(/[\r\n]+/g, " ").trim()
+      : "";
+  const sysPrompt = memoMode
+    ? CHAT_MEMO_SYSTEM
+    : ctx
+      ? CHAT_SYSTEM +
+        `\n\n[지금 사용자가 보고 있는 화면] ${ctx} — 이 맥락을 고려해 답하세요.`
+      : CHAT_SYSTEM;
+  const chatModel = memoMode ? CHAT_MEMO_MODEL : CHAT_MODEL;
+  const maxTok = memoMode ? CHAT_MEMO_MAX_TOKENS : CHAT_MAX_TOKENS;
+
+  let upstream;
+  try {
+    upstream = await fetch(`${CHAT_API_BASE}/chat/completions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${CHAT_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: chatModel,
+        max_tokens: maxTok,
+        temperature: memoMode ? 0.5 : 0.3,
+        stream: true,
+        messages: [{ role: "system", content: sysPrompt }, ...turns],
+      }),
+    });
+  } catch (e) {
+    console.error("[chat] connect fail:", e.message);
+    return res.status(502).json({ error: "AI 서버에 연결하지 못했습니다." });
+  }
+  if (!upstream.ok || !upstream.body) {
+    const t = await upstream.text().catch(() => "");
+    console.error("[chat] upstream", upstream.status, t.slice(0, 300));
+    return res
+      .status(502)
+      .json({ error: "AI 응답 오류입니다. 잠시 후 다시 시도하세요." });
+  }
+
+  res.setHeader("Content-Type", "text/plain; charset=utf-8");
+  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("X-Accel-Buffering", "no");
+  const decoder = new TextDecoder();
+  let buf = "";
+  try {
+    for await (const chunk of upstream.body) {
+      buf += decoder.decode(chunk, { stream: true });
+      let nl;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, nl).trim();
+        buf = buf.slice(nl + 1);
+        if (!line.startsWith("data:")) continue;
+        const data = line.slice(5).trim();
+        if (data === "[DONE]") {
+          res.end();
+          return;
+        }
+        try {
+          const j = JSON.parse(data);
+          const tok =
+            j.choices &&
+            j.choices[0] &&
+            j.choices[0].delta &&
+            j.choices[0].delta.content;
+          if (tok) res.write(tok);
+        } catch (_) {}
+      }
+    }
+    res.end();
+  } catch (e) {
+    console.error("[chat] stream error:", e.message);
+    try {
+      res.end();
+    } catch (_) {}
+  }
+});
+
+// 챗 답변 피드백: 👍/👎 는 기록만, '의견'(버그/개선)은 기존 건의 파이프라인으로 관리자 전달
+const chatFeedback = []; // 최근 200건(메모리, 관리자 확인용)
+app.post("/api/chat/feedback", async (req, res) => {
+  const rating = ["up", "down", "comment"].includes(req.body && req.body.rating)
+    ? req.body.rating
+    : null;
+  if (!rating) return res.status(400).json({ error: "잘못된 요청입니다." });
+
+  const ip = req.ip || "unknown";
+  const comment = normalizeFeedbackText(req.body && req.body.comment, 2000);
+  const question = normalizeFeedbackText(req.body && req.body.question, 1000);
+  const answer = normalizeFeedbackText(req.body && req.body.answer, 2000);
+  const user = getSessionUser(req);
+
+  const entry = {
+    rating,
+    comment,
+    question,
+    answer,
+    userName: (user && user.name) || "비로그인",
+    at: new Date().toISOString(),
+  };
+  chatFeedback.push(entry);
+  if (chatFeedback.length > 200) chatFeedback.shift();
+  console.log(
+    `[chat-feedback] ${rating}` +
+      (comment ? " · " + comment.slice(0, 80) : "") +
+      (question ? ` (Q: ${question.slice(0, 60)})` : ""),
+  );
+
+  if (rating === "comment" && comment) {
+    const fl = rateLimit.checkFeedbackLimit(ip);
+    if (fl.allowed) {
+      rateLimit.recordFeedbackAttempt(ip);
+      const fb = {
+        category: "AI 도우미",
+        title: "AI 도우미 의견",
+        message: `${comment}\n\n[질문]\n${question}\n\n[답변]\n${answer}`,
+        contactEmail: "",
+        pageUrl: normalizeFeedbackText(req.body && req.body.pageUrl, 500),
+        userAgent: normalizeFeedbackText(req.get("user-agent"), 500),
+        userId: (user && user.id) || "",
+        userName: (user && user.name) || "비로그인",
+        studentId: "",
+        submittedAt: entry.at,
+      };
+      try {
+        await sendFeedbackEmail(fb);
+      } catch (_) {}
+      if (supa.isEnabled()) {
+        try {
+          await supa.recordFeedback({
+            ...fb,
+            emailSent: false,
+            emailError: "",
+            meta: { source: "ai-chat" },
+          });
+        } catch (_) {}
+      }
+    }
+  }
+  res.json({ ok: true });
+});
+
+// ── 관리자 전용 AI 보조 (로그인 기록·사용로그·사용자 등 관리자 데이터를 읽고 답함) ──
+// 관리자 챗은 입력(스냅샷)이 크므로 무료 한도에 안정적인 70b 기본. 필요시 env로 gpt-oss-120b 지정.
+const CHAT_ADMIN_MODEL = process.env.CHAT_ADMIN_MODEL || CHAT_MODEL;
+
+// 관리자 AI가 필요할 때 호출하는 읽기 전용 도구들 (tool-calling)
+const ADMIN_TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "list_users",
+      description:
+        "전체 사용자 목록(이름·크레딧·관리자여부·무제한·모델제한·학번·가입일).",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_login_logs",
+      description:
+        "최근 로그인 기록. only_failed=true면 실패한 로그인만, user_name으로 특정 사용자만 필터.",
+      parameters: {
+        type: "object",
+        properties: {
+          limit: { type: "integer", description: "최대 건수(기본 80)" },
+          only_failed: { type: "boolean" },
+          user_name: { type: "string" },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_usage_logs",
+      description:
+        "최근 보고서 생성 로그(누가·언제·비용·메타). user_name으로 특정 사용자만.",
+      parameters: {
+        type: "object",
+        properties: {
+          limit: { type: "integer" },
+          user_name: { type: "string" },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_feedback",
+      description: "최근 건의사항(보고서 피드백)과 AI 도우미 피드백(👍/👎/의견).",
+      parameters: {
+        type: "object",
+        properties: { limit: { type: "integer" } },
+      },
+    },
+  },
+];
+
+async function runAdminTool(name, args) {
+  args = args || {};
+  const has = (s) => (s ? String(s).toLowerCase() : "");
+  try {
+    if (name === "list_users") {
+      const u = supa.isEnabled() ? await supa.listUsers() : [];
+      return (u || []).slice(0, 300).map((x) => ({
+        name: x.name,
+        credits: x.credits,
+        admin: !!x.is_admin,
+        unlimited: !!x.unlimited,
+        restricted_model: x.restricted_model || null,
+        student_id: x.student_id || "",
+        created_at: x.created_at,
+      }));
+    }
+    if (name === "get_login_logs") {
+      let rows = supa.isEnabled()
+        ? await supa.listLoginLogs(Math.min(Number(args.limit) || 80, 300))
+        : [];
+      if (args.only_failed) rows = rows.filter((r) => !r.success);
+      if (args.user_name)
+        rows = rows.filter((r) => has(r.user_name).includes(has(args.user_name)));
+      return rows.slice(0, 150);
+    }
+    if (name === "get_usage_logs") {
+      let rows = supa.isEnabled()
+        ? await supa.listUsageLogs(Math.min(Number(args.limit) || 60, 200))
+        : [];
+      if (args.user_name)
+        rows = rows.filter((r) => has(r.user_name).includes(has(args.user_name)));
+      return rows.slice(0, 120).map((r) => ({
+        when: r.created_at,
+        user: r.user_name,
+        usd: r.total_usd,
+        meta: r.meta || {},
+      }));
+    }
+    if (name === "get_feedback") {
+      const lim = Math.min(Number(args.limit) || 30, 100);
+      const reports = supa.isEnabled() ? await supa.listFeedback(lim) : [];
+      const chat = chatFeedback.slice(-lim).map((f) => ({
+        rating: f.rating,
+        comment: f.comment,
+        question: f.question,
+        at: f.at,
+      }));
+      return { report_feedback: reports, ai_chat_feedback: chat };
+    }
+  } catch (e) {
+    return { error: e.message };
+  }
+  return { error: "unknown tool: " + name };
+}
+app.post("/api/admin/chat", requireAdmin, async (req, res) => {
+  if (!CHAT_API_KEY) {
+    return res
+      .status(503)
+      .json({ error: "AI가 아직 준비 중입니다 (CHAT_API_KEY 미설정)." });
+  }
+  const raw = Array.isArray(req.body && req.body.messages)
+    ? req.body.messages
+    : [];
+  const turns = raw
+    .filter(
+      (m) =>
+        m &&
+        (m.role === "user" || m.role === "assistant") &&
+        typeof m.content === "string" &&
+        m.content.trim(),
+    )
+    .slice(-8)
+    .map((m) => ({ role: m.role, content: m.content.slice(0, 3000) }));
+  if (!turns.length || turns[turns.length - 1].role !== "user") {
+    return res.status(400).json({ error: "메시지가 비어 있습니다." });
+  }
+
+  const sys = `당신은 Quilo의 '관리자 보조 AI'입니다. 운영자(관리자)의 질문에 한국어로 정확히 답합니다.
+- 필요한 데이터는 제공된 도구(list_users / get_login_logs / get_usage_logs / get_feedback)를 호출해서 가져오세요. 특정 사용자·실패 로그인 등은 인자로 좁혀 조회하세요.
+- 도구로 가져온 데이터에 있는 사실만 답하고, 없으면 "데이터에 없음"이라고 하세요. 수치를 지어내지 마세요.
+- 목록/표로 간결하게. 시간은 UTC 값을 그대로 쓰되 필요하면 "약 N시간 전"을 덧붙이세요.
+- 로그인 실패가 몰린 계정/IP, 비정상 사용량 등 이상 신호가 보이면 먼저 짚어주세요.
+- 현재 시각(UTC): ${new Date().toISOString()}`;
+
+  const convo = [{ role: "system", content: sys }, ...turns];
+  try {
+    for (let round = 0; round < 5; round++) {
+      let resp;
+      try {
+        resp = await fetch(`${CHAT_API_BASE}/chat/completions`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${CHAT_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: CHAT_ADMIN_MODEL,
+            max_tokens: 1500,
+            temperature: 0.2,
+            tools: ADMIN_TOOLS,
+            tool_choice: "auto",
+            messages: convo,
+          }),
+        });
+      } catch (e) {
+        console.error("[admin-chat] connect:", e.message);
+        return res.status(502).json({ error: "AI 서버 연결 실패." });
+      }
+      if (!resp.ok) {
+        const t = await resp.text().catch(() => "");
+        console.error("[admin-chat] upstream", resp.status, t.slice(0, 400));
+        const hint =
+          resp.status === 429
+            ? "사용량 한도(잠시 후 다시)."
+            : resp.status === 404 || resp.status === 400
+              ? "모델 문제일 수 있음 (CHAT_ADMIN_MODEL 확인)."
+              : "";
+        return res
+          .status(502)
+          .json({ error: `AI 응답 오류 (${resp.status}). ${hint}`.trim() });
+      }
+      const data = await resp.json();
+      const msg = data.choices && data.choices[0] && data.choices[0].message;
+      if (!msg) return res.status(502).json({ error: "AI 응답이 비었습니다." });
+      convo.push(msg);
+      const calls = msg.tool_calls || [];
+      if (!calls.length) {
+        return res.json({ answer: msg.content || "(빈 응답)" });
+      }
+      for (const tc of calls) {
+        let parsed = {};
+        try {
+          parsed = JSON.parse((tc.function && tc.function.arguments) || "{}");
+        } catch (_) {}
+        const result = await runAdminTool(tc.function && tc.function.name, parsed);
+        convo.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify(result).slice(0, 9000),
+        });
+      }
+    }
+    return res.json({
+      answer:
+        "(데이터 조회가 길어 마무리하지 못했어요. 질문을 더 좁혀 다시 물어봐 주세요.)",
+    });
+  } catch (e) {
+    console.error("[admin-chat] loop:", e.message);
+    return res.status(500).json({ error: "분석 중 오류: " + e.message });
+  }
 });
 
 app.patch("/api/me/profile", requireAuth, async (req, res) => {
@@ -1208,6 +1666,137 @@ app.delete(
   },
 );
 
+// ── DOCX → HWPX 변환 (파일 변환기) ───────────────────────────────────────────
+// pypandoc-hwpx(Pandoc 기반)로 Word(.docx)를 한컴 HWPX 로 변환한다. 서버 처리이므로
+// 로그인 필요. HWPX 는 한컴오피스에서 열리고 거기서 .hwp 로 저장 가능.
+app.post(
+  "/api/convert-docx",
+  requireAuth,
+  upload.single("docx"),
+  async (req, res) => {
+    const file = req.file;
+    if (!file) return res.status(400).json({ error: "DOCX 파일을 업로드하세요." });
+    const name = file.originalname || "document.docx";
+    if (!/\.docx$/i.test(name)) {
+      return res.status(400).json({ error: ".docx 파일만 지원합니다." });
+    }
+    if (file.size > 25 * 1024 * 1024) {
+      return res.status(400).json({ error: "파일이 너무 큽니다(25MB 초과)." });
+    }
+    try {
+      const hwpx = await convertDocxToHwpx(file.buffer);
+      res.setHeader("Content-Type", "application/octet-stream");
+      res.setHeader("X-Filename", encodeURIComponent(name.replace(/\.docx$/i, ".hwpx")));
+      res.send(hwpx);
+    } catch (e) {
+      console.error("[convert-docx]", e.message);
+      res.status(500).json({
+        error:
+          "변환에 실패했습니다. 서버에 변환기(pandoc)가 설치되지 않았거나 문서가 복잡할 수 있습니다.",
+      });
+    }
+  },
+);
+
+// PDF 통번역 비용·시간 예측. analyze(텍스트량·스캔·수식밀도) → 실제 글자 수 기반
+// 토큰 추정 → calcCost, + 파이프라인 단계별 시간 추정. 변환 방식(auto/inplace/
+// retypeset)이 실제로 어떻게 결정되는지까지 반영한다.
+function estimatePdfTranslation(meta, mode, modelId) {
+  const pages = Math.max(1, Number(meta.page_count) || 1);
+  const chars = Math.max(0, Number(meta.text_chars) || 0);
+  const scanned = !!meta.scanned;
+  const density = Number(meta.math_density) || 0;
+  const AUTO_MATH_THRESHOLD = Number(process.env.PDF_AUTO_MATH_THRESHOLD || 12);
+  const needsRetypeset = scanned || density >= AUTO_MATH_THRESHOLD;
+  const resolvedMode =
+    mode === "retypeset" ? "retypeset" : needsRetypeset ? "retypeset" : "inplace";
+  const isOpus = !/sonnet|haiku/i.test(modelId || "");
+  const charTok = chars / 3.5;
+  const ocrMax = parseInt(process.env.PDF_OCR_MAX_PAGES || "30", 10);
+  // 텍스트 PDF(in-place·재조판)는 페이지 상한이 있어 초과 시 거부된다.
+  const maxPages = parseInt(process.env.PDF_TRANSLATE_MAX_PAGES || "80", 10);
+  const tooManyPages = !scanned && pages > maxPages;
+
+  let inTok = 0;
+  let outTok = 0;
+  let cacheRead = 0;
+  let seconds = 0;
+  let truncated = false;
+
+  if (scanned) {
+    // OCR 재조판: 페이지를 비전 이미지로 읽음(앞 30쪽 상한).
+    const procPages = Math.min(pages, ocrMax);
+    truncated = pages > ocrMax;
+    const tiles = Math.min(100, Math.ceil(procPages * 1.3));
+    inTok = tiles * 1600;
+    outTok = tiles * 900;
+    seconds = 1.5 * procPages + tiles * (isOpus ? 4.0 : 2.6) + 18;
+  } else if (resolvedMode === "retypeset") {
+    // 텍스트 PDF 재조판: 페이지를 문서 블록으로 읽고 한국어 LaTeX 생성.
+    inTok = pages * 2000;
+    outTok = (charTok || pages * 800) * 1.3;
+    const chunks = Math.ceil(pages / 5);
+    const waves = Math.ceil(chunks / 6);
+    seconds = 0.3 * pages + waves * (isOpus ? 45 : 28) + 18;
+  } else {
+    // in-place: 문단을 묶음 번역(동시 10) + 누락 재시도 + 레이아웃 삽입.
+    const batches = Math.max(1, Math.ceil(chars / 3500));
+    inTok = charTok * 1.15;
+    outTok = charTok * 1.15;
+    cacheRead = batches * 400; // 시스템 프롬프트 캐시 재사용
+    const waves = Math.ceil(batches / 10);
+    seconds = 0.5 * pages + (waves + 1) * (isOpus ? 13 : 8) + 0.7 * pages;
+  }
+
+  const usage = {
+    input_tokens: Math.round(inTok),
+    output_tokens: Math.round(outTok),
+    cache_read_input_tokens: Math.round(cacheRead),
+    cache_creation_input_tokens: 0,
+  };
+  const usd = pricing.calcCost({ usage, model: modelId }).total;
+  return {
+    mode: resolvedMode,
+    scanned,
+    pages,
+    chars,
+    truncated,
+    tooManyPages,
+    maxPages,
+    costUsd: { lo: usd * 0.7, hi: usd * 1.45 },
+    seconds: { lo: Math.round(seconds * 0.8), hi: Math.round(seconds * 1.55) },
+  };
+}
+
+// PDF 통번역 — 비용·시간 예측(파일 업로드 시 호출). analyze 만 돌려 빠르고 저렴.
+app.post(
+  "/api/translate-pdf/estimate",
+  requireBeta("pdf-translate"),
+  upload.single("pdf"),
+  async (req, res) => {
+    if (!req.file) return res.status(400).json({ error: "PDF 파일이 필요합니다." });
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pdfest-"));
+    const pdfPath = path.join(tmpDir, "in.pdf");
+    try {
+      fs.writeFileSync(pdfPath, req.file.buffer);
+      const meta = await analyzePdf(pdfPath, {});
+      const mode = String(req.body.mode || "auto");
+      const modelId = String(req.body.model || "claude-sonnet-4-6");
+      // meta 도 함께 돌려준다 → 클라이언트가 방식·모델만 바꿀 때 PDF 재업로드 없이
+      // 즉시 다시 계산한다(속도↑).
+      res.json({ ...estimatePdfTranslation(meta, mode, modelId), meta });
+    } catch (e) {
+      res.status(500).json({ error: e.message || "예측 실패" });
+    } finally {
+      try {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      } catch {
+        /* best-effort */
+      }
+    }
+  },
+);
+
 // ── PDF 통번역 (베타: 관리자 + 지정 테스터) ──────────────────────────────────
 // DeepL 식 문서 번역: 그림·레이아웃은 그대로 두고 텍스트만 한국어로 교체한다.
 // 외부로 PDF 를 보내지 않고 우리 서버에서만 처리한다 (Claude + PyMuPDF).
@@ -1299,10 +1888,50 @@ async function splitPdfToBuffers(pdfBuffer, { signal, onProgress }) {
     fs.writeFileSync(pdfPath, pdfBuffer);
     const meta = await splitPdf(pdfPath, tmpDir, { pagesPerChunk: per, signal });
     if (!meta.chunks || meta.chunks.length <= 1) return null; // 분할 의미 없음
-    return meta.chunks.map((c) => fs.readFileSync(c.path));
+    // 그림을 구간별로 배치하려면 페이지 범위(start/end)가 필요하다.
+    return meta.chunks.map((c) => ({
+      buffer: fs.readFileSync(c.path),
+      start: c.start,
+      end: c.end,
+    }));
   } catch (e) {
     onProgress(`⚠ 구간 분할 건너뜀(단일 처리): ${e.message}`);
     return null;
+  } finally {
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch {
+      /* best-effort */
+    }
+  }
+}
+
+// 텍스트 PDF 재조판 시 원본 그림을 잘라 메모리 버퍼로 돌려준다(LaTeX 복원용).
+// 그림이 없거나 실패하면 빈 배열 — 재조판은 그대로 진행된다.
+async function extractFiguresForRetypeset(pdfBuffer, { signal, onProgress }) {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pdffig-"));
+  const pdfPath = path.join(tmpDir, "in.pdf");
+  try {
+    fs.writeFileSync(pdfPath, pdfBuffer);
+    const meta = await extractFigures(pdfPath, tmpDir, { signal });
+    const figs = (meta.figures || [])
+      .map((f) => {
+        try {
+          return {
+            n: f.n,
+            page: f.page,
+            caption: f.caption || "",
+            buffer: fs.readFileSync(f.file),
+          };
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean);
+    return figs;
+  } catch (e) {
+    onProgress(`⚠ 그림 추출 건너뜀(텍스트만 재조판): ${e.message}`);
+    return [];
   } finally {
     try {
       fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -1328,15 +1957,18 @@ async function prepareScannedRouting(pdfBuffer, { signal, onProgress }) {
     fs.writeFileSync(pdfPath, pdfBuffer);
     let scanned = false;
     let mathDensity = 0;
+    let twoColumn = false;
     try {
       const a = await analyzePdf(pdfPath, { signal });
       scanned = !!a.scanned;
       mathDensity = Number(a.math_density) || 0;
+      twoColumn = !!a.two_column;
     } catch (e) {
       onProgress(`⚠ 텍스트 레이어 분석을 건너뜁니다: ${e.message}`);
-      return { scanned: false, imageBlocks: null, mathDensity: 0 };
+      return { scanned: false, imageBlocks: null, mathDensity: 0, twoColumn: false };
     }
-    if (!scanned) return { scanned: false, imageBlocks: null, mathDensity };
+    if (!scanned)
+      return { scanned: false, imageBlocks: null, mathDensity, twoColumn };
 
     onProgress(
       "🖼️ 텍스트 레이어가 없는 스캔/이미지 PDF 감지 → 고해상도 OCR 재조판으로 전환",
@@ -1379,6 +2011,7 @@ async function prepareScannedRouting(pdfBuffer, { signal, onProgress }) {
       tiles: meta.tiles,
       pageCount: meta.page_count,
       mathDensity,
+      twoColumn,
     };
   } finally {
     try {
@@ -1470,7 +2103,24 @@ async function runPdfTranslation(job, { pdfBuffer, originalName, model, mode }) 
         pushProgress(job, `🖼️ 원본 그림 ${result.figures}개를 본문에 복원했습니다.`);
       }
     } else if (resolvedMode === "retypeset") {
-      // 텍스트 PDF 재조판: 페이지 구간으로 분할해 병렬 번역(Opus 품질 유지·속도↑).
+      // 텍스트 PDF 재조판: 원본 그림을 미리 잘라두고(복원용), 페이지 구간으로 분할해
+      // 병렬 번역(Opus 품질 유지·속도↑). 그림은 %%FIG:n%% 마커 자리에 다시 끼워넣는다.
+      const figures = await extractFiguresForRetypeset(pdfBuffer, {
+        signal: ac.signal,
+        onProgress,
+      });
+      if (figures.length) {
+        pushProgress(
+          job,
+          `🖼️ 본문 그림 ${figures.length}개 추출 — 재조판본에 복원합니다.`,
+        );
+      }
+      if (routing.twoColumn) {
+        pushProgress(
+          job,
+          "📐 2단 레이아웃 감지 — 읽기 순서를 좌→우 단으로 맞추고 2단으로 조판합니다.",
+        );
+      }
       const pdfChunks = await splitPdfToBuffers(pdfBuffer, {
         signal: ac.signal,
         onProgress,
@@ -1478,10 +2128,18 @@ async function runPdfTranslation(job, { pdfBuffer, originalName, model, mode }) 
       result = await retypesetPdf({
         pdfBuffer,
         pdfChunks,
+        figures,
+        twoColumn: routing.twoColumn,
         model,
         signal: ac.signal,
         onProgress,
       });
+      if (result.figures) {
+        pushProgress(
+          job,
+          `🖼️ 원본 그림 ${result.figures}개를 재조판본에 복원했습니다.`,
+        );
+      }
     } else {
       result = await translatePdf({
         pdfBuffer,

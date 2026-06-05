@@ -2,6 +2,10 @@
 <html lang="ko">
   <head>
     <meta charset="utf-8" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="theme-color" content="#243ba2" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>관리자 — Quilo</title>
     <script>
@@ -50,6 +54,17 @@
         <p id="rateInfo" class="hint">환율 로딩 중...</p>
       </div>
     </header>
+
+    <section class="settings-card" id="adminAiSection">
+      <h2>🤖 AI 관리자 보조</h2>
+      <p class="hint">로그인 기록·사용 로그·사용자 등 관리자 데이터를 묻고 분석받으세요. (질문 시 해당 데이터가 외부 AI로 전송됩니다 — 관리자 전용)</p>
+      <div id="aaMsgs" style="border:1px solid #e6e8f0;border-radius:10px;background:#f6f7fb;padding:12px;min-height:110px;max-height:340px;overflow-y:auto;display:flex;flex-direction:column"></div>
+      <div id="aaChips" style="margin-top:10px"></div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <textarea id="aaInput" rows="1" placeholder="예: 최근 로그인 실패가 많은 IP 있어?" style="flex:1;resize:none;border:1px solid #d7dbe8;border-radius:9px;padding:9px 11px;font:inherit;font-size:14px"></textarea>
+        <button id="aaSend" class="secondary compact">전송</button>
+      </div>
+    </section>
 
     <section class="settings-card">
       <h2>사용자 추가</h2>
@@ -713,5 +728,92 @@
       loadLogs();
       loadBeta();
     </script>
-  </body>
+      <script src="/chat-widget.js" defer></script>
+    <script>
+      (function () {
+        var msgs = [],
+          busy = false;
+        var box = document.getElementById("aaMsgs"),
+          input = document.getElementById("aaInput"),
+          send = document.getElementById("aaSend");
+        if (!box || !send || !input) return;
+        function bubble(role, text) {
+          var d = document.createElement("div");
+          d.style.cssText =
+            "margin:5px 0;padding:8px 11px;border-radius:11px;white-space:pre-wrap;font-size:13.5px;line-height:1.6;max-width:92%;" +
+            (role === "user"
+              ? "background:#243ba2;color:#fff;align-self:flex-end;"
+              : "background:#fff;border:1px solid #e6e8f0;align-self:flex-start;");
+          d.textContent = text;
+          box.appendChild(d);
+          box.scrollTop = box.scrollHeight;
+          return d;
+        }
+        function ask(text) {
+          text = (text || "").trim();
+          if (!text || busy) return;
+          bubble("user", text);
+          msgs.push({ role: "user", content: text });
+          input.value = "";
+          busy = true;
+          send.disabled = true;
+          var b = bubble("ai", "분석 중…");
+          fetch("/api/admin/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ messages: msgs.slice(-8) }),
+          })
+            .then(function (r) {
+              return r.json().then(function (j) {
+                return { ok: r.ok, j: j };
+              });
+            })
+            .then(function (o) {
+              if (!o.ok)
+                throw new Error((o.j && o.j.error) || "오류가 발생했어요.");
+              var ans = (o.j && o.j.answer) || "(응답이 없습니다.)";
+              b.textContent = ans;
+              box.scrollTop = box.scrollHeight;
+              msgs.push({ role: "assistant", content: ans });
+            })
+            .catch(function (e) {
+              b.style.cssText +=
+                "background:#fff4f4;border-color:#f3c0c0;color:#9b2c2c;";
+              b.textContent = e.message || "오류가 발생했어요.";
+            })
+            .then(function () {
+              busy = false;
+              send.disabled = false;
+              input.focus();
+            });
+        }
+        send.onclick = function () {
+          ask(input.value);
+        };
+        input.addEventListener("keydown", function (e) {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            ask(input.value);
+          }
+        });
+        var chips = document.getElementById("aaChips");
+        [
+          "최근 로그인 실패가 몰린 IP나 계정 있어?",
+          "오늘 보고서를 가장 많이 만든 사용자 top 5",
+          "크레딧 0인데 최근 로그인한 사용자 있어?",
+          "최근 AI 도우미 피드백 요약해줘",
+        ].forEach(function (q) {
+          if (!chips) return;
+          var btn = document.createElement("button");
+          btn.className = "secondary compact";
+          btn.style.cssText = "font-size:12px;margin:0 6px 6px 0;";
+          btn.textContent = q;
+          btn.onclick = function () {
+            ask(q);
+          };
+          chips.appendChild(btn);
+        });
+      })();
+    </script>
+</body>
 </html>

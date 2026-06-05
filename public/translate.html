@@ -2,6 +2,10 @@
 <html lang="ko">
   <head>
     <meta charset="utf-8" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="theme-color" content="#243ba2" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>PDF 통번역 (베타) · Quilo</title>
     <meta name="description" content="PDF 문서를 그림·레이아웃 그대로 두고 텍스트만 한국어로 통번역합니다. (관리자 테스트 중)" />
@@ -90,11 +94,17 @@
                 <label>
                   <span class="field-label">번역 모델</span>
                   <select id="trModel" name="model">
-                    <option value="claude-opus-4-8" selected>Opus 4.8 — 최고 품질·수식 복원 (권장)</option>
-                    <option value="claude-sonnet-4-6">Sonnet 4.6 — 빠르고 저렴 (간단한 문서)</option>
+                    <option value="claude-sonnet-4-6" selected>Sonnet 4.6 — 빠르고 저렴 (기본·권장)</option>
+                    <option value="claude-opus-4-8">Opus 4.8 — 최고 품질·수식 복원 (어려운 수식·논문)</option>
                   </select>
                 </label>
               </div>
+
+              <div
+                id="trEstimate"
+                class="hint"
+                style="display: none; margin: 4px 0 0; padding: 10px 12px; border: 1px solid var(--border, #e5e7eb); border-radius: 8px; line-height: 1.7"
+              ></div>
 
               <div class="form-actions">
                 <button type="submit" id="trBtn" class="btn btn-primary btn-lg">한국어로 번역</button>
@@ -106,15 +116,15 @@
               <b>잘 되는 것</b>
               <ul>
                 <li>일반 문서: 레이아웃·그림 그대로 두고 글자만 한국어로(빠른 번역).</li>
-                <li>수식 많은 논문: 다시 조판하며 깨진 수식을 정준형으로 복원(재조판).</li>
+                <li>수식 많은 논문: 다시 조판하며 깨진 수식을 정준형으로 복원(재조판). <b>본문 속 그림·그래프도 원본을 잘라 제자리에 복원</b>합니다.</li>
+                <li><b>2단 논문</b>은 2단 구조를 유지하며 재조판합니다(읽기 순서 좌→우 자동 보정).</li>
                 <li>스캔본·이미지 PDF: 자동 OCR 후 재조판 — 원본 그림도 잘라 복원.</li>
                 <li>긴 문서는 구간을 나눠 병렬로 빠르게 처리합니다.</li>
               </ul>
               <b style="display:block;margin-top:10px">아직 안 되거나 제한되는 것</b>
               <ul>
                 <li><b>스캔본은 약 30쪽까지</b> — 더 긴 스캔본은 앞부분만 처리됩니다.</li>
-                <li><b>텍스트 PDF에 박힌 그림</b>은 재조판 시 빠질 수 있습니다(스캔본은 그림 복원됨).</li>
-                <li><b>2단 등 복잡한 레이아웃</b>은 재조판에서 1단으로 재배치됩니다(원본 배치 그대로는 아님).</li>
+                <li><b>3단 이상이거나 본문·표가 불규칙하게 섞인 레이아웃</b>은 단순화될 수 있습니다(2단까지는 유지).</li>
                 <li><b>그래프·표가 이미지로 박힌 경우</b> 그 안의 글자·축 라벨은 번역되지 않습니다.</li>
                 <li>스캔본의 그림 <b>위치</b>가 가끔 살짝 어긋날 수 있습니다.</li>
                 <li><b>손글씨, 암호 걸린 PDF, 한국어 외 다른 언어로의 번역</b>은 지원하지 않습니다.</li>
@@ -258,6 +268,164 @@
           });
         });
 
+        // ── 예상 비용·시간 ──
+        // 파일은 한 번만 업로드해 분석(meta)하고 캐시한다. 방식·모델만 바꾸면 재업로드
+        // 없이 즉시 다시 계산한다(속도↑). 업로드엔 30초 타임아웃(멈춤 방지).
+        const estEl = document.getElementById("trEstimate");
+        let estSeq = 0;
+        let estMeta = null;
+        let estKey = null;
+        const fmtDur = (s) =>
+          s < 90 ? `${Math.round(s)}초` : `${Math.round(s / 60)}분`;
+        const EST_PRICE = {
+          "claude-sonnet-4-6": { input: 3, output: 15, cacheRead: 0.3 },
+          "claude-opus-4-8": { input: 15, output: 75, cacheRead: 1.5 },
+        };
+        // 서버 estimatePdfTranslation 과 동일 공식(미러) — 토글 시 즉시 재계산용.
+        function calcEstimate(meta, mode, modelId) {
+          const pages = Math.max(1, +meta.page_count || 1);
+          const chars = Math.max(0, +meta.text_chars || 0);
+          const scanned = !!meta.scanned;
+          const density = +meta.math_density || 0;
+          const needs = scanned || density >= 12;
+          const rmode =
+            mode === "retypeset" ? "retypeset" : needs ? "retypeset" : "inplace";
+          const isOpus = !/sonnet|haiku/i.test(modelId || "");
+          const charTok = chars / 3.5;
+          const ocrMax = 30;
+          const maxPages = 80;
+          const tooManyPages = !scanned && pages > maxPages;
+          let inTok = 0,
+            outTok = 0,
+            cacheRead = 0,
+            seconds = 0,
+            truncated = false;
+          if (scanned) {
+            const pp = Math.min(pages, ocrMax);
+            truncated = pages > ocrMax;
+            const t = Math.min(100, Math.ceil(pp * 1.3));
+            inTok = t * 1600;
+            outTok = t * 900;
+            seconds = 1.5 * pp + t * (isOpus ? 4 : 2.6) + 18;
+          } else if (rmode === "retypeset") {
+            inTok = pages * 2000;
+            outTok = (charTok || pages * 800) * 1.3;
+            const c = Math.ceil(pages / 5),
+              w = Math.ceil(c / 6);
+            seconds = 0.3 * pages + w * (isOpus ? 45 : 28) + 18;
+          } else {
+            const b = Math.max(1, Math.ceil(chars / 3500));
+            inTok = charTok * 1.15;
+            outTok = charTok * 1.15;
+            cacheRead = b * 400;
+            const w = Math.ceil(b / 10);
+            seconds = 0.5 * pages + (w + 1) * (isOpus ? 13 : 8) + 0.7 * pages;
+          }
+          const p = EST_PRICE[modelId] || EST_PRICE["claude-sonnet-4-6"];
+          const usd =
+            (inTok / 1e6) * p.input +
+            (outTok / 1e6) * p.output +
+            (cacheRead / 1e6) * p.cacheRead;
+          return {
+            mode: rmode,
+            scanned,
+            pages,
+            chars,
+            truncated,
+            tooManyPages,
+            maxPages,
+            costUsd: { lo: usd * 0.7, hi: usd * 1.45 },
+            seconds: {
+              lo: Math.round(seconds * 0.8),
+              hi: Math.round(seconds * 1.55),
+            },
+          };
+        }
+        function renderEstimate(e) {
+          estEl.style.display = "block";
+          if (e.tooManyPages) {
+            estEl.innerHTML =
+              `📄 <b>${e.pages}쪽</b> · ⚠ <b style="color:#b45309">처리 한도(약 ${e.maxPages}쪽) 초과</b>` +
+              `<br><span style="opacity:.7">PDF를 나눠서 업로드하면 번역할 수 있습니다.</span>`;
+            return;
+          }
+          const modeLabel = e.scanned
+            ? "스캔본 OCR 재조판"
+            : e.mode === "retypeset"
+              ? "재조판(수식·정밀)"
+              : "빠른 번역(레이아웃 유지)";
+          const krwLo = Math.round(e.costUsd.lo * 1400);
+          const krwHi = Math.round(e.costUsd.hi * 1400);
+          estEl.innerHTML =
+            `📄 <b>${e.pages}쪽</b> · 변환 방식 <b>${modeLabel}</b>` +
+            (e.truncated
+              ? ` <span style="color:#b45309">(앞 30쪽만 처리)</span>`
+              : ``) +
+            `<br>⏱ 예상 시간 <b>약 ${fmtDur(e.seconds.lo)} ~ ${fmtDur(e.seconds.hi)}</b>` +
+            ` · 💰 예상 비용 <b>약 ₩${krwLo.toLocaleString()} ~ ₩${krwHi.toLocaleString()}</b>` +
+            `<br><span style="opacity:.65">문서 내용·서버 상황에 따라 달라질 수 있습니다(실제 비용은 완료 후 표시).</span>`;
+        }
+        const fileKey = (f) =>
+          f ? `${f.name}|${f.size}|${f.lastModified}` : "";
+        async function updateEstimate() {
+          if (!fileInput.files || !fileInput.files.length) {
+            estEl.style.display = "none";
+            return;
+          }
+          const f = fileInput.files[0];
+          const mode = document.getElementById("trMode").value;
+          const model = document.getElementById("trModel").value;
+          // 같은 파일이면 재업로드 없이 즉시 재계산(방식·모델만 바뀐 경우).
+          if (estMeta && estKey === fileKey(f)) {
+            renderEstimate(calcEstimate(estMeta, mode, model));
+            return;
+          }
+          const seq = ++estSeq;
+          estEl.style.display = "block";
+          estEl.textContent = "⏳ 예상 비용·시간 계산 중...";
+          const fd = new FormData();
+          fd.append("pdf", f);
+          fd.append("model", model);
+          fd.append("mode", mode);
+          const ctrl = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), 30000);
+          try {
+            const r = await fetch("/api/translate-pdf/estimate", {
+              method: "POST",
+              body: fd,
+              signal: ctrl.signal,
+            });
+            clearTimeout(timer);
+            if (seq !== estSeq) return; // 최신 요청만 반영
+            if (!r.ok) {
+              estEl.style.display = "none";
+              return;
+            }
+            const e = await r.json();
+            if (e.meta) {
+              estMeta = e.meta;
+              estKey = fileKey(f);
+            }
+            renderEstimate(e);
+          } catch (err) {
+            clearTimeout(timer);
+            if (seq !== estSeq) return;
+            if (err && err.name === "AbortError") {
+              estEl.innerHTML =
+                '<span style="opacity:.75">예상 계산이 지연됩니다(파일이 크거나 네트워크가 느림) — 그냥 번역을 진행해도 됩니다.</span>';
+            } else {
+              estEl.style.display = "none";
+            }
+          }
+        }
+        fileInput.addEventListener("change", updateEstimate);
+        document
+          .getElementById("trMode")
+          .addEventListener("change", updateEstimate);
+        document
+          .getElementById("trModel")
+          .addEventListener("change", updateEstimate);
+
         function appendLine(text) {
           progressEl.textContent += text + "\n";
           progressEl.scrollTop = progressEl.scrollHeight;
@@ -350,5 +518,6 @@
         }
       }
     </script>
-  </body>
+      <script src="/chat-widget.js" defer></script>
+</body>
 </html>
