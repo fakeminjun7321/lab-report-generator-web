@@ -357,6 +357,9 @@ _AGL = {
 _CMSY_FIX = {"⇤": "*", "⇥": "×", "2": "∈", "p": "√"}
 _CMEX_FIX = {"P": "Σ"}
 _CMMI_FIX = {"↵": "α", "⇡": "π", "✏": "ε"}
+# MathTechnical(기호 전용 폰트): 화학 결합선(—)이 ToUnicode 손상으로 'U'로 추출돼
+# 'C—H'가 'CUH', 'H—C—H'가 'HUCUH'로 보이던 것 수정. 일반 글자 'U'는 본문폰트라 무관.
+_MATHTECH_FIX = {"U": "–"}
 
 # 수식·기호 전용 폰트(이 폰트의 슬롯은 전부 기호 → /Differences 전부 적용 안전).
 _MATH_FONT_KEYS = (
@@ -508,6 +511,8 @@ def _fix_span_text(font, text):
             out.append(_CMEX_FIX.get(ch, ch))
         elif "CMMI" in f:
             out.append(_CMMI_FIX.get(ch, ch))
+        elif "MathTechnical" in f:
+            out.append(_MATHTECH_FIX.get(ch, ch))
         else:
             out.append(ch)
     return "".join(out)
