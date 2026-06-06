@@ -1889,9 +1889,14 @@ def cmd_render(pdf_path, out_path, font_path):
         figs = figs_for(pno)  # 그림 영역 — 덮기/그리기를 이 밖으로 자른다(캐시 재사용).
         # 블록 rect 를 그림 밖으로 클리핑(완전히 그림 안이면 제외). → 그림 배경에 흰 자국
         # 안 생기고, 캡션에 붙은 축 라벨(V(RAB) 등)도 원본 그대로 유지.
+        # 그림 + '원본유지(수식·전자배치·라벨)' 블록 영역 밖으로 클리핑한다. 번역문이
+        # 옆/위에 놓인 식·전자배치 위에 겹쳐 찍히던 것(답안 (d)(e), 논문 식 옆 본문 등)을
+        # 막는다 — 번역문은 식과 안 겹치는 가장 큰 직사각형에만 그려진다.
+        kept_here = kept_by_page.get(pno, [])
+        clip_regions = list(figs) + list(kept_here)
         clipped = []
         for rect, ko, sz, col, bd, it in items:
-            cr = _clip_out(rect, figs) if figs else fitz.Rect(rect)
+            cr = _clip_out(rect, clip_regions) if clip_regions else fitz.Rect(rect)
             if cr is None or cr.width < 3 or cr.height < 3:
                 continue
             clipped.append((cr, ko, sz, col, bd, it))
