@@ -199,7 +199,10 @@ def _merge_superscript_ions(blocks):
     return out
 
 
-_SENT_TERMINATORS = ".?!:;。．？！…"
+# 종결부호 = 문장 끝(이걸로 끝나면 문단 경계로 보고 병합 안 함). ':' ';' 는 제외 —
+# 제목 'X: Y' 가 두 줄(블록)로 쪼개졌을 때, 콜론 때문에 병합이 막혀 둘째 줄이 따로
+# (가운데로) 떠 제목이 두 동강 나던 문제(6.5 '동핵 이원자 분자:' / '제2주기 원자') 수정.
+_SENT_TERMINATORS = ".?!。．？！…"
 
 
 def _ends_midsentence(txt):
@@ -258,6 +261,11 @@ def _coalesce_paragraphs(blocks):
             continue
         # 앞 블록이 문장 중간에서 끊겼을 때만 병합(종결부호로 끝나면 문단 경계 유지).
         if not _ends_midsentence(_block_raw_text(prev)):
+            out.append(blk)
+            continue
+        # 새 블록이 '절 번호'(6.3, 6.13 등)나 챕터 목차 항목으로 시작하면 병합 안 함
+        # — 목차(TOC) 항목들이 한 줄로 뭉쳐 'X.Y 제목 X.Z 제목 …'처럼 섞이는 것 방지.
+        if re.match(r"\s*\d+\.\d+(\s|$)", _block_raw_text(blk)):
             out.append(blk)
             continue
         # 병합: 줄 이어붙이고 bbox 합침(prev 는 out[-1] 과 동일 객체 → 제자리 갱신).
@@ -522,7 +530,7 @@ def _line_in_figs(line_bbox, figs):
     )
 
 
-def block_text(block, figs=None):
+def block_text(block, figs=None, tag=False):
     """블록 안의 줄들을 사람이 읽을 한 문단 문자열로 합친다.
 
     화면상 줄바꿈(wrap)은 공백으로 이어 붙인다 — 한 문장이 여러 줄에 걸쳐도
@@ -535,8 +543,12 @@ def block_text(block, figs=None):
     line 으로 내보낸다. 그대로 line 순서로 join 하면 '( )( )( ) 1 2 2 s s p p x y'
     처럼 뒤섞인다. → y 가 겹치는 line 들을 한 '시각적 줄'로 묶고, 그 안 span 을
     x 순서로 재정렬해 읽기 순서를 복원한다(번역 입력 정확도↑, 깨진 인라인식 수정).
+
+    tag=True 면 위/아래첨자 span 을 <sup>..</sup>/<sub>..</sub> 로 감싼다. 이 태그가
+    번역을 거쳐 렌더에서 진짜 위/아래첨자로 그려져 H₂⁺·ψ_el·σ_g 같은 식이 평문화
+    ('H+2','ψel','σg')되지 않는다. 같은 x 에 겹친 첨자는 sub→sup 순으로 정렬한다.
     """
-    rows = []  # [{y0, y1, items:[(x0, text)]}]
+    rows = []  # [{y0, y1, items:[{x, cy, sz, t}]}]
     for ln in block.get("lines", []):
         if _line_in_figs(ln.get("bbox", (0, 0, 0, 0)), figs):
             continue
@@ -548,7 +560,8 @@ def block_text(block, figs=None):
             if t == "":
                 continue
             b = sp.get("bbox", (lb[0], ly0, lb[0], ly1))
-            items.append((b[0], t))
+            items.append({"x": b[0], "cy": (b[1] + b[3]) / 2.0,
+                          "sz": sp.get("size", 10.0) or 10.0, "t": t})
         if not items:
             continue
         placed = False
@@ -566,11 +579,43 @@ def block_text(block, figs=None):
     rows.sort(key=lambda r: r["y0"])
     out = []
     for row in rows:
-        row["items"].sort(key=lambda it: it[0])  # 줄 안 x(왼→오) 순서
-        s = "".join(t for _, t in row["items"]).strip()
+        its = row["items"]
+        if tag:
+            main = max(i["sz"] for i in its)
+            big = [i["cy"] for i in its if i["sz"] >= 0.85 * main]
+            mcy = (sum(big) / len(big)) if big else its[0]["cy"]
+            for i in its:
+                i["style"] = "normal"
+                if i["sz"] < 0.78 * main:  # 작은 글자 = 첨자 후보
+                    if i["cy"] > mcy + 0.06 * main:
+                        i["style"] = "sub"
+                    elif i["cy"] < mcy - 0.06 * main:
+                        i["style"] = "sup"
+            # x 4pt 버킷 + (normal<sub<sup) 순 → 겹친 첨자도 H₂⁺ 순서로(stable sort).
+            rank = {"normal": 0, "sub": 1, "sup": 2}
+            its.sort(key=lambda i: (round(i["x"] / 4.0), rank[i["style"]]))
+            s = ""
+            for i in its:
+                if i["style"] == "sub":
+                    s += "<sub>" + i["t"] + "</sub>"
+                elif i["style"] == "sup":
+                    s += "<sup>" + i["t"] + "</sup>"
+                else:
+                    s += i["t"]
+            s = _merge_adjacent_tags(s).strip()
+        else:
+            its.sort(key=lambda i: i["x"])  # 줄 안 x(왼→오) 순서
+            s = "".join(i["t"] for i in its).strip()
         if s:
             out.append(s)
     return " ".join(out).strip()
+
+
+def _merge_adjacent_tags(s):
+    """인접한 같은 태그 병합: <sub>2</sub><sub>s</sub> → <sub>2s</sub> (깔끔·안정)."""
+    s = re.sub(r"</sub>\s*<sub>", "", s)
+    s = re.sub(r"</sup>\s*<sup>", "", s)
+    return s
 
 
 def _nonfig_rect(block, figs=None):
@@ -1038,13 +1083,15 @@ def cmd_extract(pdf_path):
             continue  # 모든 줄이 그림 영역이면 text 가 비어 자동 제외(그래프 라벨 등)
         if _keep_original_block(block):
             continue  # 독립 표시수식·기호/오비탈 라벨([6.1]·1σg 등) → 원본 유지(재그리기·오역 방지)
-        # 표시수식 band 안의 '단어 없는' 조각(흩어진 첨자) → 원본 유지(식이 흩어지지 않게).
-        if (
-            not re.search(r"[A-Za-z]{3,}", text)
-            and not re.search(r"[가-힣]", text)
-            and _in_eq_band(block, pno)
-        ):
-            continue
+        # 표시수식 band 안의 조각 → 원본 유지(식이 흩어지지 않게). (1) 단어 없는 조각,
+        # 또는 (2) 작은 글씨(첨자 크기) 조각. 식의 아래/위첨자 라벨(V_en·V_nn 등)은
+        # 'ennnVe'처럼 흩어져 [A-Za-z]{3,} 에 우연히 걸리지만, 글씨가 작아(첨자) 본문이
+        # 아니다 → 번역·재그리기하면 식 위에 겹쳐 깨진다. 작으면 band 안에서 원본 유지.
+        if _in_eq_band(block, pno):
+            _bsz = dominant_size_color(block)[0] or 10.0
+            _no_word = not re.search(r"[A-Za-z]{3,}", text) and not re.search(r"[가-힣]", text)
+            if _no_word or _bsz < 8.5:
+                continue
         total_text_chars += len(text)  # scanned 판정엔 모든 글자 포함
         # 그림 근처의 '짧은' 블록(축 끝 라벨 RAB 등)은 그대로 영어로 둔다.
         # 번역 대상 줄들만의 bbox 로 판정(그림 줄은 이미 빠짐).
@@ -1058,7 +1105,10 @@ def cmd_extract(pdf_path):
             )
             if near_fig:
                 continue
-        blocks.append({"id": bid, "page": pno, "text": text})
+        # 번역 payload 는 <sub>/<sup> 태그가 붙은 버전(위/아래첨자 보존). 위의 모든 판정은
+        # 태그 없는 clean text 로 한다(태그가 길이·단어수 판정을 흔들지 않게).
+        text_tagged = block_text(block, regs, tag=True)
+        blocks.append({"id": bid, "page": pno, "text": text_tagged})
     # 텍스트가 거의 없으면 스캔본(글자가 이미지)일 가능성이 높다 → Node가 안내.
     scanned = len(doc) > 0 and total_text_chars < 20 * len(doc)
     # 진단: 그림/표 영역 감지 수 + PyMuPDF 버전(서버/로컬 동작 차이 추적용)
@@ -1391,6 +1441,153 @@ def _draw_fit(
     return True
 
 
+_TAG_RE = re.compile(r"<(sub|sup)>(.*?)</\1>", re.DOTALL)
+_STRIP_TAG_RE = re.compile(r"</?(?:sub|sup)>")
+
+
+def _strip_tags(s):
+    """<sub>/<sup> 태그만 제거하고 내용은 남긴다(폭·길이 계산용)."""
+    return _STRIP_TAG_RE.sub("", s) if ("<sub>" in s or "<sup>" in s) else s
+
+
+def _has_tags(s):
+    return "<sub>" in s or "<sup>" in s
+
+
+def _parse_richtext(s):
+    """<sub>..</sub>/<sup>..</sup> 가 든 문자열을 (글자, style) 목록으로 분해.
+    style ∈ {'normal','sub','sup'}. 태그 밖 < > & 는 그대로 글자로 둔다."""
+    atoms = []
+    pos = 0
+    for m in _TAG_RE.finditer(s):
+        for ch in s[pos:m.start()]:
+            atoms.append((ch, "normal"))
+        style = "sub" if m.group(1) == "sub" else "sup"
+        for ch in m.group(2):
+            atoms.append((ch, style))
+        pos = m.end()
+    for ch in s[pos:]:
+        atoms.append((ch, "normal"))
+    return atoms
+
+
+def _draw_rich(page, rect, html_text, color, font, start_size, align,
+               max_x=None, max_y=None, min_size=5.0):
+    """위/아래첨자(<sub>/<sup>)가 든 번역문을 진짜 첨자로 그린다(첨자는 0.66배 크기 +
+    baseline 이동). TextWriter 한 개를 공유해 그리므로 insert_htmlbox 같은 OOM 이 없다.
+    좌/가운데 정렬 + 탐욕적 줄바꿈 + 넘치면 폰트 축소. (수식 줄은 양끝맞춤 안 함.)
+
+    반환: 원래 크기보다 줄였으면 True."""
+    rect = fitz.Rect(rect)
+    rect.normalize()
+    if rect.width < 4 or rect.height < 2:
+        return False
+    pr = page.rect
+    right = max(rect.x1, max_x if max_x is not None else pr.x1 - 6)
+    bottom = max(rect.y1, max_y if max_y is not None else pr.y1 - 6)
+    atoms = _parse_richtext(html_text)
+    if not atoms:
+        return False
+    centered = align == fitz.TEXT_ALIGN_CENTER
+    avail_w = (rect.width if centered else (right - rect.x0)) - 1.0
+    avail_w = max(8.0, avail_w)
+
+    def cw(ch, sz):
+        try:
+            return font.text_length(ch, fontsize=sz)
+        except Exception:
+            return sz * 0.5
+
+    # (글자,style) → 단어 단위로 묶기(공백 분리). 단어는 [(ch,style,size_factor)].
+    def build_words():
+        words, w = [], []
+        for ch, st in atoms:
+            if ch == " ":
+                if w:
+                    words.append(w)
+                    w = []
+                words.append([(" ", "normal")])
+            else:
+                w.append((ch, st))
+        if w:
+            words.append(w)
+        return words
+
+    words = build_words()
+
+    def layout(fs):
+        """줄 단위 배치. 반환 (lines, total_h). lines=[(y, [(x,ch,sz,dy)])]."""
+        sub = 0.66
+        lh = fs * 1.34
+        lines = []
+        cur = []
+        x = rect.x0
+        for word in words:
+            wid = sum(cw(ch, fs * sub if st != "normal" else fs) for ch, st in word)
+            is_space = len(word) == 1 and word[0][0] == " "
+            if not is_space and cur and (x + wid) > rect.x0 + avail_w:
+                lines.append(cur)
+                cur = []
+                x = rect.x0
+                if is_space:
+                    continue
+            for ch, st in word:
+                sz = fs * sub if st != "normal" else fs
+                dy = 0.0
+                if st == "sub":
+                    dy = fs * 0.16
+                elif st == "sup":
+                    dy = -fs * 0.34
+                cur.append((x, ch, sz, dy, st))
+                x += cw(ch, sz)
+        if cur:
+            lines.append(cur)
+        # 줄 끝 공백 트림 폭 계산 + 가운데 정렬 보정
+        return lines, len(lines) * lh, lh
+
+    fs = max(min_size, min(float(start_size), 200.0))
+    floor = max(min_size, round(0.62 * float(start_size), 1)) if start_size >= 9.0 else min_size
+    chosen = None
+    while fs >= floor:
+        lines, total_h, lh = layout(fs)
+        if rect.y0 + total_h <= bottom + 0.5:
+            chosen = (lines, lh, fs)
+            break
+        fs -= 0.5
+    if chosen is None:
+        # 바닥까지 줄여도 넘치면 바닥 크기로(잘려도 그림)
+        fs = floor
+        lines, total_h, lh = layout(fs)
+        chosen = (lines, lh, fs)
+    lines, lh, fs = chosen
+
+    tw = fitz.TextWriter(pr)
+    y = rect.y0 + fs
+    for ln in lines:
+        if not ln:
+            y += lh
+            continue
+        # 가운데 정렬이면 줄 폭만큼 x 이동
+        x_off = 0.0
+        if centered:
+            last = ln[-1]
+            line_w = (last[0] + cw(last[1], last[2])) - ln[0][0]
+            x_off = max(0.0, (avail_w - line_w) / 2.0)
+        for (x, ch, sz, dy, st) in ln:
+            if ch == " ":
+                continue
+            try:
+                tw.append(fitz.Point(x + x_off, y + dy), ch, font=font, fontsize=sz)
+            except Exception:
+                pass
+        y += lh
+    try:
+        tw.write_text(page, color=color)
+    except Exception:
+        pass
+    return fs < float(start_size) - 0.01
+
+
 def _clip_out(rect, regions):
     """rect 에서 figure 영역을 뺀 '그림 밖' 가장 큰 직사각형을 돌려준다(완전히 그림
     안이면 None). 캡션 bbox 가 그림 위로 뻗쳐도 그림 배경을 덮지 않게(흰 자국 방지) +
@@ -1469,6 +1666,7 @@ def _est_text_height(text, width, fs, font):
     살짝 넉넉히 잡는다(유효폭 90%·줄간격 1.34) — 과소추정하면 다음 블록과 겹친다."""
     if width < 6 or fs <= 0:
         return max(fs, 1.0) * 1.34
+    text = _strip_tags(text)  # <sub>/<sup> 태그는 폭에서 제외
     try:
         tl = font.text_length(text, fontsize=fs)
     except Exception:
@@ -1774,24 +1972,24 @@ def cmd_render(pdf_path, out_path, font_path):
                     if rect.width >= 0.45 * page_width
                     else (mx - rect.x0)
                 )
-                one_line = bfont.text_length(ko, fontsize=_size) <= (avail_w - 2)
+                one_line = bfont.text_length(_strip_tags(ko), fontsize=_size) <= (avail_w - 2)
             except Exception:
                 one_line = False
             align = _detect_align(
                 rect, page_width, single_line=one_line, is_heading=is_heading
             )
-            if _draw_fit(
-                page,
-                rect,
-                ko,
-                _color01(color),
-                bfont,
-                _size,
-                align,
-                italic=is_ital,
-                max_x=mx,
-                max_y=my,
-            ):
+            if _has_tags(ko):
+                # 위/아래첨자(<sub>/<sup>) 포함 → 진짜 첨자로 그리는 rich 드로어.
+                drew_shrunk = _draw_rich(
+                    page, rect, ko, _color01(color), bfont, _size, align,
+                    max_x=mx, max_y=my,
+                )
+            else:
+                drew_shrunk = _draw_fit(
+                    page, rect, ko, _color01(color), bfont, _size, align,
+                    italic=is_ital, max_x=mx, max_y=my,
+                )
+            if drew_shrunk:
                 shrunk += 1
             replaced += 1
 
