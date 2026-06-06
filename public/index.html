@@ -2,6 +2,10 @@
 <html lang="ko">
   <head>
     <meta charset="utf-8" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="theme-color" content="#243ba2" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Quilo</title>
     <script>
@@ -44,6 +48,7 @@
               <a href="/tools/graph.html">그래프 생성기</a>
               <a href="/tools/convert.html">파일 변환기 <span style="font-size:11px;opacity:.6">· 이미지·PDF·수식</span></a>
               <a href="/translate.html" id="navBetaTranslate" hidden>PDF 통번역 <span class="beta-pill">베타</span></a>
+              <a href="/editor.html" id="navBetaEditor" hidden>Quilo Code <span class="beta-pill">베타</span></a>
             </div>
           </div>
           <div class="nav-dd" data-dd>
@@ -71,8 +76,9 @@
                   <label><span class="field-label">비밀번호</span>
                   <input id="li_password" type="password" required autocomplete="current-password" /></label>
                 </div>
-                <label class="check-line"><input type="checkbox" id="li_age14" /> <span>만 14세 이상 <strong>(필수)</strong></span></label>
-                <label class="check-line"><input type="checkbox" id="li_agree" /> <span>약관·개인정보·환불정책 동의 <strong>(필수)</strong></span></label>
+                <label class="li-remember" style="display:flex;align-items:center;gap:7px;font-size:13px;margin-top:2px;cursor:pointer;user-select:none">
+                  <input id="li_remember" type="checkbox" checked style="width:auto;margin:0" /> 로그인 유지
+                </label>
                 <div class="form-actions" style="margin-top:8px">
                   <button type="submit" id="li_btn" class="btn btn-primary">로그인</button>
                 </div>
@@ -222,6 +228,7 @@
             <textarea id="crUserNotes" name="userNotes" rows="4" maxlength="12000" placeholder="예: 색 변화가 예상보다 늦게 나타났고, 마지막 적정값은 종말점 판단이 애매해서 오차 분석에 반영하고 싶음"></textarea>
           </label>
           <small>.md/.txt 파일로 길게 작성한 메모도 함께 첨부할 수 있습니다. <a href="/examples.html#notes" target="_blank" rel="noopener">작성 가이드·예시 보기 →</a></small>
+          <button type="button" class="qc-memo-btn" style="display:none;align-self:flex-start;margin:4px 0 2px;font-size:12.5px;color:#243ba2;background:#eef1fc;border:1px solid #dfe4fb;border-radius:8px;padding:6px 11px;cursor:pointer" onclick="window.Quilo&&window.Quilo.openMemo('crUserNotes')">✨ AI로 메모 작성 도움받기</button>
           <input id="crUserNotesFile" name="userNotesFile" type="file" accept=".md,.txt,text/markdown,text/plain" aria-label="참고 메모 파일" />
         </div>
       </div>
@@ -362,6 +369,7 @@
             <textarea id="prUserNotes" name="userNotes" rows="4" maxlength="12000" placeholder="예: 예비 시행 1회는 포토게이트가 흔들려 제외했고, 재측정에서는 트랙 이음새를 지나며 카트가 살짝 튀는 현상이 있었음"></textarea>
           </label>
           <small>.md/.txt 파일로 길게 작성한 메모도 함께 첨부할 수 있습니다. <a href="/examples.html#notes" target="_blank" rel="noopener">작성 가이드·예시 보기 →</a></small>
+          <button type="button" class="qc-memo-btn" style="display:none;align-self:flex-start;margin:4px 0 2px;font-size:12.5px;color:#243ba2;background:#eef1fc;border:1px solid #dfe4fb;border-radius:8px;padding:6px 11px;cursor:pointer" onclick="window.Quilo&&window.Quilo.openMemo('prUserNotes')">✨ AI로 메모 작성 도움받기</button>
           <input id="prUserNotesFile" name="userNotesFile" type="file" accept=".md,.txt,text/markdown,text/plain" aria-label="참고 메모 파일" />
         </div>
       </div>
@@ -446,6 +454,7 @@
             <textarea id="preUserNotes" name="userNotes" rows="4" maxlength="12000" placeholder="예: 선생님이 안전 주의와 수율 계산을 특히 강조했고, 실험 과정에서 왜 ice bath를 쓰는지 자세히 설명하고 싶음"></textarea>
           </label>
           <small>.md/.txt 파일로 길게 작성한 메모도 함께 첨부할 수 있습니다. <a href="/examples.html#notes" target="_blank" rel="noopener">작성 가이드·예시 보기 →</a></small>
+          <button type="button" class="qc-memo-btn" style="display:none;align-self:flex-start;margin:4px 0 2px;font-size:12.5px;color:#243ba2;background:#eef1fc;border:1px solid #dfe4fb;border-radius:8px;padding:6px 11px;cursor:pointer" onclick="window.Quilo&&window.Quilo.openMemo('preUserNotes')">✨ AI로 메모 작성 도움받기</button>
           <input id="preUserNotesFile" name="userNotesFile" type="file" accept=".md,.txt,text/markdown,text/plain" aria-label="참고 메모 파일" />
         </div>
       </div>
@@ -857,6 +866,13 @@
         .then((d) => applyAuth(true, d))
         .catch(() => applyAuth(false));
 
+      // 로그인 유지 사용자: 저장된 이름 미리 채우기
+      try {
+        const _saved = localStorage.getItem("lastUsername");
+        const _u = document.getElementById("li_username");
+        if (_saved && _u && !_u.value) _u.value = _saved;
+      } catch (_) {}
+
       // 로그인 폼(드롭다운) 제출
       document
         .getElementById("loginForm")
@@ -864,17 +880,14 @@
           e.preventDefault();
           const err = document.getElementById("li_err");
           err.style.display = "none";
+          const remember =
+            document.getElementById("li_remember")?.checked !== false;
+          const uname = document.getElementById("li_username").value;
           const body = {
-            username: document.getElementById("li_username").value,
+            username: uname,
             password: document.getElementById("li_password").value,
-            age14Confirmed: document.getElementById("li_age14").checked,
-            termsAccepted: document.getElementById("li_agree").checked,
+            remember,
           };
-          if (!body.age14Confirmed || !body.termsAccepted) {
-            err.textContent = "만 14세 이상 확인과 약관 동의가 필요합니다.";
-            err.style.display = "block";
-            return;
-          }
           const btn = document.getElementById("li_btn");
           btn.disabled = true;
           btn.textContent = "로그인 중...";
@@ -886,6 +899,10 @@
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || "로그인 실패");
+            try {
+              if (remember) localStorage.setItem("lastUsername", uname);
+              else localStorage.removeItem("lastUsername");
+            } catch (_) {}
             location.reload();
           } catch (ex) {
             err.textContent = ex.message;
@@ -1200,12 +1217,14 @@
       fetch("/api/me/beta")
         .then((r) => (r.ok ? r.json() : { features: [] }))
         .then((b) => {
-          if (
-            Array.isArray(b.features) &&
-            b.features.includes("pdf-translate")
-          ) {
+          const feats = Array.isArray(b.features) ? b.features : [];
+          if (feats.includes("pdf-translate")) {
             const el = document.getElementById("navBetaTranslate");
             if (el) el.hidden = false;
+          }
+          if (feats.includes("code-editor")) {
+            const el2 = document.getElementById("navBetaEditor");
+            if (el2) el2.hidden = false;
           }
         })
         .catch(() => {});
@@ -1767,6 +1786,31 @@
         return `$${est.lo.toFixed(2)} ~ $${est.hi.toFixed(2)} (약 ₩${krwLo.toLocaleString()} ~ ₩${krwHi.toLocaleString()})`;
       }
 
+      // 생성 예상 시간(초). 출력 토큰량 × 모델 속도 + 기본 오버헤드 + 타입별 추가(웹검색).
+      // 모델별 1k 출력토큰당 초: Opus 가 느리고 Sonnet 이 빠르다. 사진/데이터가 많으면
+      // 입력 처리가 늘어 약간 더 걸린다.
+      const OUTPUT_TOKENS = {
+        "chem-pre": [6000, 10000],
+        "chem-result": [8000, 13000],
+        "phys-result": [6000, 10000],
+      };
+      function estimateGenSeconds(type, modelId, extraInputTokens = 0) {
+        const perK = modelId === "claude-sonnet-4-6" ? 9 : 16; // 초/1k 출력토큰
+        const base = 25; // 입력 처리 + 문서 빌드 + 차트
+        const webSearch = type === "chem-pre" ? 40 : 0; // 시약 물성 웹검색
+        const [oLo, oHi] = OUTPUT_TOKENS[type] || [7000, 11000];
+        const inExtra = (extraInputTokens / 1000) * (perK * 0.25); // 사진·데이터 입력분
+        return {
+          lo: Math.round(base + webSearch + (oLo / 1000) * perK + inExtra),
+          hi: Math.round(base + webSearch + (oHi / 1000) * perK + inExtra),
+        };
+      }
+      function formatDuration(sec) {
+        const f = (s) =>
+          s < 90 ? `${Math.round(s)}초` : `${Math.round(s / 60)}분`;
+        return `약 ${f(sec.lo)} ~ ${f(sec.hi)}`;
+      }
+
       function getUserNotesValue(id) {
         return (document.getElementById(id)?.value || "").trim();
       }
@@ -1888,6 +1932,7 @@
             ["참고 메모", userNotesSummary(userNotes, userNotesFile)],
             ["PDF", `${est.sizeKB}KB`],
             ["예상 비용", costRangeText(est, krwLo, krwHi)],
+            ["예상 시간", formatDuration(estimateGenSeconds("chem-pre", model))],
           ],
           note: `실제 비용은 완료 후 표시됩니다. ${USE_POLICY_NOTE}`,
         });
@@ -1999,6 +2044,7 @@
             ["첨부", `사전보고서${dataFile ? ", 데이터" : ", 데이터 없음"}${(crUserNotes || crUserNotesFile) && !dataFile ? " (메모 활용)" : ""}, 사진 ${photos.length}장${manual ? ", 매뉴얼" : ""}`],
             ["총 크기", `${est.totalKB}KB`],
             ["예상 비용", costRangeText(est, krwLo, krwHi)],
+            ["예상 시간", formatDuration(estimateGenSeconds("chem-result", crModel, photos.length * 1500))],
           ],
           note: `실제 비용은 완료 후 표시됩니다. ${USE_POLICY_NOTE}`,
         });
@@ -2110,6 +2156,7 @@
             ["입력", `${inputLabel}${photos.length > 0 ? `, 사진 ${photos.length}장` : ""}${manual ? ", 매뉴얼" : ""}`],
             ["총 크기", `${est.totalKB}KB`],
             ["예상 비용", costRangeText(est, krwLo, krwHi)],
+            ["예상 시간", formatDuration(estimateGenSeconds("phys-result", prModel, photos.length * 1500))],
           ],
           note: `기본 평가 기준을 적용합니다. ${USE_POLICY_NOTE}`,
         });
@@ -2207,5 +2254,6 @@
         });
       }
     </script>
+  <script src="/chat-widget.js" defer></script>
   </body>
 </html>

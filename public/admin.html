@@ -2,6 +2,10 @@
 <html lang="ko">
   <head>
     <meta charset="utf-8" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="theme-color" content="#243ba2" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>관리자 — Quilo</title>
     <script>
@@ -18,6 +22,161 @@
       })();
     </script>
     <link rel="stylesheet" href="/style.css" />
+    <!-- 코드 에디터(CodeMirror) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/eclipse.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/markdown/markdown.min.js"></script>
+    <!-- VS Code 스타일 에디터: CodeMirror 애드온 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/foldgutter.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/dialog/dialog.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closetag.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/foldcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/foldgutter.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/brace-fold.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/xml-fold.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/indent-fold.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/comment-fold.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/selection/active-line.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/searchcursor.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/search.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/jump-to-line.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/dialog/dialog.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/comment/comment.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/anyword-hint.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/keymap/sublime.min.js"></script>
+    <style>
+      /* ── VS Code 스타일 코드 에디터 ── */
+      #adminEditorSection .ide{display:flex;flex-direction:column;height:560px;border:1px solid #2b2b2b;border-radius:10px;overflow:hidden;background:#1e1e1e;color:#ccc;font-family:Menlo,Consolas,"Courier New",monospace}
+      #adminEditorSection .ide-top{display:flex;flex:1;min-height:0}
+      #adminEditorSection .ide-activity{width:48px;background:#333;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 0;flex:0 0 auto}
+      #adminEditorSection .ide-activity button{width:40px;height:40px;background:none;border:none;color:#858585;font-size:18px;cursor:pointer;border-left:2px solid transparent}
+      #adminEditorSection .ide-activity button:hover{color:#fff}
+      #adminEditorSection .ide-activity button.on{color:#fff;border-left-color:#007acc}
+      #adminEditorSection .ide-side{width:200px;background:#252526;overflow:auto;flex:0 0 auto;border-right:1px solid #1a1a1a}
+      #adminEditorSection .ide-side-head{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#bbb}
+      #adminEditorSection .ide-side-head button{background:none;border:none;color:#bbb;font-size:17px;cursor:pointer;line-height:1}
+      #adminEditorSection .ide-file{padding:4px 12px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#ccc;font-size:13px}
+      #adminEditorSection .ide-file:hover{background:#2a2d2e}
+      #adminEditorSection .ide-file.on{background:#37373d}
+      #adminEditorSection .ide-main{flex:1;display:flex;flex-direction:column;min-width:0}
+      #adminEditorSection .ide-tabs{display:flex;background:#252526;height:36px;overflow-x:auto;flex:0 0 auto}
+      #adminEditorSection .ide-tab{display:flex;align-items:center;gap:6px;padding:0 10px;height:36px;background:#2d2d2d;color:#969696;border-right:1px solid #1a1a1a;cursor:pointer;white-space:nowrap;font-size:12.5px}
+      #adminEditorSection .ide-tab.on{background:#1e1e1e;color:#fff;box-shadow:inset 0 2px 0 #007acc}
+      #adminEditorSection .ide-tab-ic{font-size:10px}
+      #adminEditorSection .ide-tab-x{opacity:.5;font-size:15px;width:16px;text-align:center;border-radius:4px}
+      #adminEditorSection .ide-tab-x:hover{opacity:1;background:#ffffff22}
+      #adminEditorSection .ide-editorhost{flex:1;min-height:0;overflow:hidden}
+      #adminEditorSection .ide .CodeMirror{height:100%;font-family:Menlo,Consolas,monospace;font-size:13.5px;line-height:1.5}
+      #adminEditorSection .ide-panel{height:185px;flex:0 0 auto;display:flex;flex-direction:column;border-top:1px solid #2b2b2b;background:#1e1e1e}
+      #adminEditorSection .ide-panel-tabs{display:flex;align-items:center;gap:2px;height:30px;background:#252526;padding:0 6px;flex:0 0 auto}
+      #adminEditorSection .ide-panel-tabs button{background:none;border:none;color:#969696;font-size:11.5px;letter-spacing:.04em;text-transform:uppercase;padding:6px 10px;cursor:pointer;border-bottom:1px solid transparent}
+      #adminEditorSection .ide-panel-tabs button.on{color:#fff;border-bottom-color:#007acc}
+      #adminEditorSection .ide-panel-body{flex:1;min-height:0;position:relative}
+      #adminEditorSection .ide-pane{display:none;position:absolute;inset:0;width:100%;height:100%;margin:0;overflow:auto;box-sizing:border-box}
+      #adminEditorSection .ide-pane.on{display:block}
+      #adminEditorSection pre#ceOut{padding:10px 12px;color:#d4d4d4;font-family:Menlo,Consolas,monospace;font-size:12.5px;white-space:pre-wrap;word-break:break-word}
+      #adminEditorSection iframe#ceFrame{border:none;background:#fff}
+      #adminEditorSection #ceAi{padding:10px 12px}
+      #adminEditorSection .ide-statusbar{height:24px;flex:0 0 auto;background:#007acc;color:#fff;display:flex;align-items:center;gap:14px;padding:0 12px;font-size:12px;font-family:-apple-system,system-ui,sans-serif}
+      #adminEditorSection .ide-statusbar #stRun{cursor:pointer;font-weight:600}
+      #adminEditorSection .ide-statusbar #stMsg{color:#cfe9ff}
+      #adminEditorSection .ide-statusbar select.ide-lang{background:transparent;color:#fff;border:none;font:inherit;font-size:12px;cursor:pointer}
+      #adminEditorSection .ide-statusbar select.ide-lang option{color:#000}
+      #adminEditorSection #ceAi select,#adminEditorSection #ceAi textarea{background:#3c3c3c;color:#e4e4e4;border:1px solid #555;border-radius:5px;font:inherit;font-size:13px;padding:6px 8px}
+      #adminEditorSection #ceAi textarea{width:100%;box-sizing:border-box;resize:vertical}
+      #adminEditorSection #ceAi .ide-ai-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+      #adminEditorSection #ceAi button#caGo{background:#0e639c;color:#fff;border:none;border-radius:5px;padding:7px 14px;font-weight:600;cursor:pointer}
+      #adminEditorSection #ceAi #caText{background:#252526;border:1px solid #3c3c3c;border-radius:6px;padding:9px 11px;color:#d4d4d4;white-space:pre-wrap;word-break:break-word;max-height:200px;overflow:auto;font-size:12.5px;line-height:1.5}
+      #adminEditorSection #ceAi #caActions{margin-top:7px;display:flex;gap:6px;flex-wrap:wrap}
+      #adminEditorSection #ceAi #caActions button{background:#3c3c3c;color:#e4e4e4;border:1px solid #555;border-radius:5px;padding:5px 10px;font-size:12px;cursor:pointer}
+      #adminEditorSection #ceAi label{color:#bbb;font-size:12px;display:flex;align-items:center;gap:5px}
+      /* VS Code Dark+ 토큰/구조 색 (material-darker 위에 덮기) */
+      #adminEditorSection .cm-s-material-darker.CodeMirror{background:#1e1e1e;color:#d4d4d4}
+      #adminEditorSection .cm-s-material-darker .CodeMirror-gutters{background:#1e1e1e;border:none}
+      #adminEditorSection .cm-s-material-darker .CodeMirror-linenumber{color:#858585}
+      #adminEditorSection .cm-s-material-darker .CodeMirror-cursor{border-left:2px solid #aeafad}
+      #adminEditorSection .cm-s-material-darker .CodeMirror-activeline-background{background:#2a2d2e}
+      #adminEditorSection .cm-s-material-darker .CodeMirror-selected{background:#264f78 !important}
+      #adminEditorSection .cm-s-material-darker .CodeMirror-matchingbracket{color:#ffd700 !important;border-bottom:1px solid #ffd700}
+      #adminEditorSection .cm-s-material-darker .cm-keyword{color:#569cd6}
+      #adminEditorSection .cm-s-material-darker .cm-def{color:#dcdcaa}
+      #adminEditorSection .cm-s-material-darker .cm-variable{color:#9cdcfe}
+      #adminEditorSection .cm-s-material-darker .cm-variable-2{color:#9cdcfe}
+      #adminEditorSection .cm-s-material-darker .cm-property{color:#dcdcaa}
+      #adminEditorSection .cm-s-material-darker .cm-string{color:#ce9178}
+      #adminEditorSection .cm-s-material-darker .cm-string-2{color:#ce9178}
+      #adminEditorSection .cm-s-material-darker .cm-number{color:#b5cea8}
+      #adminEditorSection .cm-s-material-darker .cm-comment{color:#6a9955;font-style:italic}
+      #adminEditorSection .cm-s-material-darker .cm-atom{color:#569cd6}
+      #adminEditorSection .cm-s-material-darker .cm-operator{color:#d4d4d4}
+      #adminEditorSection .cm-s-material-darker .cm-tag{color:#569cd6}
+      #adminEditorSection .cm-s-material-darker .cm-attribute{color:#9cdcfe}
+      #adminEditorSection .cm-s-material-darker .cm-builtin{color:#4ec9b0}
+      #adminEditorSection .cm-s-material-darker .cm-type{color:#4ec9b0}
+      #adminEditorSection .cm-s-material-darker .CodeMirror-foldmarker{color:#ffd700;background:#333;border-radius:3px;padding:0 4px;text-shadow:none}
+      #adminEditorSection .CodeMirror-dialog{background:#252526;color:#ccc;border-color:#454545}
+      #adminEditorSection .CodeMirror-dialog input{background:#3c3c3c;color:#fff;border:1px solid #555;outline:none}
+      .CodeMirror-hints{background:#252526;border:1px solid #454545;color:#d4d4d4;z-index:99999;font-family:Menlo,Consolas,monospace;font-size:13px}
+      .CodeMirror-hint{color:#d4d4d4}
+      li.CodeMirror-hint-active{background:#094771;color:#fff}
+      /* 미니맵 */
+      #adminEditorSection .ide-editorwrap{flex:1;min-height:0;display:flex}
+      #adminEditorSection .ide-minimap{width:84px;flex:0 0 auto;position:relative;background:#1e1e1e;border-left:1px solid #2b2b2b;overflow:hidden;cursor:pointer}
+      #adminEditorSection .ide-minimap pre{margin:0;padding:4px;font-family:Menlo,Consolas,monospace;font-size:3px;line-height:4px;color:#8a8a8a;white-space:pre;overflow:hidden;pointer-events:none}
+      #adminEditorSection .ide-mini-view{position:absolute;left:0;right:0;top:0;background:#ffffff14;border:1px solid #ffffff2b;pointer-events:none}
+      #adminEditorSection .ide.nominimap .ide-minimap{display:none}
+      /* 탐색기 액션 / 더티 점 / 인라인 이름변경 / 폴더 */
+      #adminEditorSection .ide-side-actions{display:flex;gap:1px}
+      #adminEditorSection .ide-side-actions button{font-size:15px}
+      #adminEditorSection .ide-tab-name{pointer-events:none}
+      #adminEditorSection .ide-folder-name{padding:5px 10px;font-size:11px;color:#bbb;cursor:pointer;border-bottom:1px solid #1a1a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      #adminEditorSection input.ide-rename{background:#3c3c3c;color:#fff;border:1px solid #007acc;border-radius:3px;font:inherit;font-size:12.5px;width:120px;padding:1px 5px;outline:none}
+      #adminEditorSection .ide-statusbar #stSave,#adminEditorSection .ide-statusbar #stDownload,#adminEditorSection .ide-statusbar #stMinimap,#adminEditorSection .ide-statusbar #stTheme{cursor:pointer}
+      /* 라이트 테마 */
+      #adminEditorSection .ide.light{background:#fff;color:#333;border-color:#ddd}
+      #adminEditorSection .ide.light .ide-activity{background:#e8e8e8}
+      #adminEditorSection .ide.light .ide-activity button{color:#666}
+      #adminEditorSection .ide.light .ide-activity button:hover,#adminEditorSection .ide.light .ide-activity button.on{color:#111}
+      #adminEditorSection .ide.light .ide-side{background:#f3f3f3;border-right-color:#e0e0e0}
+      #adminEditorSection .ide.light .ide-side-head,#adminEditorSection .ide.light .ide-side-head button,#adminEditorSection .ide.light .ide-folder-name{color:#555}
+      #adminEditorSection .ide.light .ide-file{color:#333}
+      #adminEditorSection .ide.light .ide-file:hover{background:#e4e6eb}
+      #adminEditorSection .ide.light .ide-file.on{background:#dcdfe6}
+      #adminEditorSection .ide.light .ide-tabs{background:#ececec}
+      #adminEditorSection .ide.light .ide-tab{background:#e4e4e4;color:#555;border-right-color:#dcdcdc}
+      #adminEditorSection .ide.light .ide-tab.on{background:#fff;color:#111}
+      #adminEditorSection .ide.light .ide-panel{background:#fff;border-top-color:#e0e0e0}
+      #adminEditorSection .ide.light .ide-panel-tabs{background:#ececec}
+      #adminEditorSection .ide.light .ide-panel-tabs button{color:#555}
+      #adminEditorSection .ide.light .ide-panel-tabs button.on{color:#111}
+      #adminEditorSection .ide.light pre#ceOut{color:#222}
+      #adminEditorSection .ide.light .ide-minimap{background:#fafafa;border-left-color:#e0e0e0}
+      #adminEditorSection .ide.light .ide-minimap pre{color:#bbb}
+      #adminEditorSection .ide.light .ide-mini-view{background:#00000010;border-color:#00000022}
+      #adminEditorSection .ide.light #ceAi select,#adminEditorSection .ide.light #ceAi textarea{background:#fff;color:#222;border-color:#ccc}
+      #adminEditorSection .ide.light #ceAi #caText{background:#f6f7fb;color:#222;border-color:#e0e0e0}
+      #adminEditorSection .ide.light #ceAi #caActions button{background:#eef0f4;color:#222;border-color:#d0d4dd}
+      #adminEditorSection .ide.light #ceAi label{color:#555}
+      @media (max-width:640px){#adminEditorSection .ide-side{display:none}#adminEditorSection .ide{height:480px}}
+    </style>
+    <style>
+      #adminTabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 16px; }
+      #adminTabs button.atab { font: inherit; font-size: 13px; font-weight: 600; padding: 8px 14px; border: 1px solid #d8e0ee; background: #fff; color: #475569; border-radius: 9px; cursor: pointer; }
+      #adminTabs button.atab.on { background: #243ba2; color: #fff; border-color: #243ba2; }
+      #adminTabs button.atab:hover { border-color: #243ba2; }
+      .CodeMirror { height: 360px; border: 1px solid #e6e8f0; border-radius: 10px; font-size: 13.5px; }
+    </style>
   </head>
   <body>
     <header class="app-header">
@@ -50,6 +209,30 @@
         <p id="rateInfo" class="hint">환율 로딩 중...</p>
       </div>
     </header>
+
+    <nav id="adminTabs" aria-label="관리자 섹션">
+      <button class="atab" data-go="ai">🤖 AI 보조</button>
+      <button class="atab" data-go="users">👤 사용자</button>
+      <button class="atab" data-go="beta">🧪 베타</button>
+      <button class="atab" data-go="logs">📊 로그</button>
+      <button class="atab" data-go="editor">🧩 코드 에디터</button>
+    </nav>
+
+    <section class="settings-card" id="adminAiSection">
+      <h2>🤖 AI 관리자 보조</h2>
+      <p class="hint">로그인·사용 로그·통계·베타 현황을 묻고, 크레딧 충전·rate 해제·베타 토글·사용자 생성 등 작업을 <b>확인 후 실행</b>할 수 있습니다. (질문 데이터는 외부 AI로 전송 — 관리자 전용)</p>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 9px">
+        <span style="font-size:12.5px;color:#475569;font-weight:700">모델</span>
+        <select id="aaModel" title="개조(무료) / 똑똑한 모델(유료)" style="padding:6px 9px;border:1px solid #d7dbe8;border-radius:8px;font:inherit;font-size:13px;max-width:300px"></select>
+        <span class="hint" id="aaModelHint" style="font-size:12px;margin:0"></span>
+      </div>
+      <div id="aaMsgs" style="border:1px solid #e6e8f0;border-radius:10px;background:#f6f7fb;padding:12px;min-height:110px;max-height:340px;overflow-y:auto;display:flex;flex-direction:column"></div>
+      <div id="aaChips" style="margin-top:10px"></div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <textarea id="aaInput" rows="1" placeholder="예: 최근 로그인 실패가 많은 IP 있어?" style="flex:1;resize:none;border:1px solid #d7dbe8;border-radius:9px;padding:9px 11px;font:inherit;font-size:14px"></textarea>
+        <button id="aaSend" class="secondary compact">전송</button>
+      </div>
+    </section>
 
     <section class="settings-card">
       <h2>사용자 추가</h2>
@@ -152,6 +335,86 @@
         </table>
       </div>
       <p id="logStatus" class="hint"></p>
+    </section>
+
+    <section class="settings-card" id="adminEditorSection">
+      <h2>🧩 코드 에디터</h2>
+      <p class="hint">브라우저 안에서 동작하는 VS Code 스타일 편집기 — 여러 파일·탭, 자동완성(Ctrl/⌘+Space), 찾기(Ctrl/⌘+F), 주석 토글(Ctrl/⌘+/), 저장(Ctrl/⌘+S), 멀티커서. JS는 ▶ 실행, HTML은 미리보기.</p>
+      <p style="margin:0 0 12px">
+        <a href="/editor.html" target="_blank" style="display:inline-flex;align-items:center;gap:7px;background:#0e639c;color:#fff;text-decoration:none;border-radius:8px;padding:9px 16px;font-weight:600">⛶ 전체 화면 Quilo Code 열기 (베타)</a>
+        <span class="hint" style="margin-left:8px">— 더 큰 화면 · 오른쪽 Agent 패널 · 로컬 폴더 열기. 아래는 미니 임베드입니다.</span>
+      </p>
+      <div id="ide" class="ide">
+        <div class="ide-top">
+          <div class="ide-activity">
+            <button data-act="explorer" class="on" title="탐색기">🗂</button>
+            <button data-act="run" title="실행 (Ctrl/⌘+Enter)">▶</button>
+            <button data-act="ai" title="AI 도우미">✨</button>
+          </div>
+          <div class="ide-side" id="ideSide">
+            <div class="ide-side-head"><span>탐색기</span><span class="ide-side-actions"><button id="ideOpenFile" title="로컬 파일 열기">📂</button><button id="ideOpenFolder" title="로컬 폴더 열기">📁</button><button id="ideNewFile" title="새 파일">＋</button></span></div>
+            <div id="ideFiles"></div>
+          </div>
+          <div class="ide-main">
+            <div class="ide-tabs" id="ideTabs"></div>
+            <div class="ide-editorwrap">
+              <div class="ide-editorhost"><textarea id="ceArea"></textarea></div>
+              <div class="ide-minimap" id="ideMinimap"><pre id="ideMiniCode"></pre><div class="ide-mini-view" id="ideMiniView"></div></div>
+            </div>
+            <input type="file" id="ideFileInput" multiple hidden />
+            <div class="ide-panel" id="idePanel">
+              <div class="ide-panel-tabs">
+                <button data-panel="output" class="on">출력</button>
+                <button data-panel="preview">미리보기</button>
+                <button data-panel="ai">✨ AI 도우미</button>
+                <span style="flex:1"></span>
+                <button id="idePanelClose" title="패널 접기">▾</button>
+              </div>
+              <div class="ide-panel-body">
+                <pre id="ceOut" class="ide-pane on">▶ 실행(또는 Ctrl/⌘+Enter)을 누르면 결과가 여기에 표시됩니다.</pre>
+                <iframe id="ceFrame" class="ide-pane" title="미리보기"></iframe>
+                <div id="ceAi" class="ide-pane">
+                  <div class="ide-ai-row">
+                    <select id="caModel" title="AI 모델(무료/유료)"></select>
+                    <span id="caHint" style="color:#9aa;font-size:12px"></span>
+                  </div>
+                  <div class="ide-ai-row">
+                    <textarea id="caPrompt" rows="2" placeholder="예: 이 코드 버그 고쳐줘 · 함수 짜줘 · 설명해줘   (Ctrl/⌘+Enter)"></textarea>
+                  </div>
+                  <div class="ide-ai-row">
+                    <label><input type="checkbox" id="caUseCode" checked /> 현재 파일 첨부</label>
+                    <button id="caGo">✨ 생성</button>
+                  </div>
+                  <div id="caResult" style="display:none">
+                    <div id="caText"></div>
+                    <div id="caActions"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="ide-statusbar">
+          <span id="stRun" title="실행 (Ctrl/⌘+Enter)">▶ 실행</span>
+          <span id="stSave" title="디스크에 저장 (Ctrl/⌘+S)">💾 저장</span>
+          <span id="stDownload" title="현재 파일 다운로드">⬇ 다운로드</span>
+          <span id="stMsg"></span>
+          <span style="flex:1"></span>
+          <span id="stPos">Ln 1, Col 1</span>
+          <span>Spaces: 2</span>
+          <select id="ceLang" class="ide-lang" title="언어">
+            <option value="javascript">JavaScript</option>
+            <option value="htmlmixed">HTML</option>
+            <option value="css">CSS</option>
+            <option value="python">Python</option>
+            <option value="markdown">Markdown</option>
+            <option value="application/json">JSON</option>
+          </select>
+          <span id="stMinimap" title="미니맵 토글">🗺</span>
+          <span id="stTheme" title="라이트/다크 전환">🌙</span>
+          <span>UTF-8</span>
+        </div>
+      </div>
     </section>
 
     <footer class="site-footer">
@@ -713,5 +976,1207 @@
       loadLogs();
       loadBeta();
     </script>
-  </body>
+      <script src="/chat-widget.js" defer></script>
+    <script>
+      (function () {
+        var msgs = [],
+          busy = false;
+        var box = document.getElementById("aaMsgs"),
+          input = document.getElementById("aaInput"),
+          send = document.getElementById("aaSend");
+        if (!box || !send || !input) return;
+        var modelSel = document.getElementById("aaModel");
+        var modelHint = document.getElementById("aaModelHint");
+        if (modelSel) {
+          fetch("/api/admin/chat/models")
+            .then(function (r) {
+              return r.json();
+            })
+            .then(function (d) {
+              var ms = (d && d.models) || [];
+              modelSel.innerHTML = "";
+              ms.forEach(function (m) {
+                var o = document.createElement("option");
+                o.value = m.id;
+                o.textContent = m.label + (m.available ? "" : " (키 없음)");
+                if (!m.available) o.disabled = true;
+                modelSel.appendChild(o);
+              });
+              try {
+                var sm = localStorage.getItem("adminAiModel");
+                if (
+                  sm &&
+                  ms.some(function (m) {
+                    return m.id === sm && m.available;
+                  })
+                )
+                  modelSel.value = sm;
+              } catch (e) {}
+              var cur = ms.filter(function (m) {
+                return m.id === modelSel.value;
+              })[0];
+              if (!cur || !cur.available) {
+                var first = ms.filter(function (m) {
+                  return m.available;
+                })[0];
+                if (first) modelSel.value = first.id;
+              }
+            })
+            .catch(function () {
+              if (modelHint) modelHint.textContent = "모델 목록 로드 실패";
+            });
+          modelSel.onchange = function () {
+            try {
+              localStorage.setItem("adminAiModel", modelSel.value);
+            } catch (e) {}
+          };
+        }
+        function bubble(role, text) {
+          var d = document.createElement("div");
+          d.style.cssText =
+            "margin:5px 0;padding:8px 11px;border-radius:11px;white-space:pre-wrap;font-size:13.5px;line-height:1.6;max-width:92%;" +
+            (role === "user"
+              ? "background:#243ba2;color:#fff;align-self:flex-end;"
+              : "background:#fff;border:1px solid #e6e8f0;align-self:flex-start;");
+          d.textContent = text;
+          box.appendChild(d);
+          box.scrollTop = box.scrollHeight;
+          return d;
+        }
+        function actBtn(b, bg) {
+          b.style.cssText =
+            "border:none;border-radius:8px;padding:6px 13px;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;color:#fff;background:" +
+            bg;
+        }
+        // AI가 제안한 쓰기 작업을 '확인 후 실행' 카드로 렌더링
+        function renderActions(actions) {
+          actions.forEach(function (a) {
+            var card = document.createElement("div");
+            card.style.cssText =
+              "align-self:flex-start;max-width:94%;margin:6px 0;padding:11px 13px;border:1px solid #ffd9a8;background:#fff8ee;border-radius:12px;font-size:13px;line-height:1.5;";
+            var title = document.createElement("div");
+            title.style.cssText =
+              "font-weight:700;margin-bottom:8px;color:#7a4b00;";
+            title.textContent = "⚙ 확인 필요 — " + (a.summary || a.action);
+            card.appendChild(title);
+            var pw = null;
+            if (a.needsPassword) {
+              pw = document.createElement("input");
+              pw.type = "password";
+              pw.placeholder = "새 계정 비밀번호 (5자 이상)";
+              pw.autocomplete = "new-password";
+              pw.style.cssText =
+                "display:block;width:100%;box-sizing:border-box;margin:0 0 8px;padding:7px 9px;border:1px solid #d7dbe8;border-radius:7px;font:inherit;";
+              card.appendChild(pw);
+            }
+            var row = document.createElement("div");
+            row.style.cssText = "display:flex;gap:7px;align-items:center;";
+            var ok = document.createElement("button");
+            ok.textContent = "확인 실행";
+            actBtn(ok, "#176a3a");
+            var no = document.createElement("button");
+            no.textContent = "취소";
+            actBtn(no, "#8a8f9a");
+            var st = document.createElement("span");
+            st.style.cssText = "font-size:12px;color:#555;";
+            row.appendChild(ok);
+            row.appendChild(no);
+            row.appendChild(st);
+            card.appendChild(row);
+            box.appendChild(card);
+            box.scrollTop = box.scrollHeight;
+
+            no.onclick = function () {
+              ok.disabled = no.disabled = true;
+              card.style.opacity = 0.55;
+              st.textContent = "취소됨";
+            };
+            ok.onclick = function () {
+              if (a.needsPassword && (!pw.value || pw.value.length < 5)) {
+                st.style.color = "#9b2c2c";
+                st.textContent = "비밀번호 5자 이상";
+                pw.focus();
+                return;
+              }
+              ok.disabled = no.disabled = true;
+              st.style.color = "#555";
+              st.textContent = "실행 중…";
+              var body = { action: a.action, params: a.params };
+              if (a.needsPassword) body.password = pw.value;
+              fetch("/api/admin/action/execute", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body),
+              })
+                .then(function (r) {
+                  return r.json().then(function (j) {
+                    return { ok: r.ok, j: j };
+                  });
+                })
+                .then(function (o2) {
+                  if (!o2.ok) throw new Error((o2.j && o2.j.error) || "실행 실패");
+                  st.style.color = "#176a3a";
+                  st.textContent = "✓ " + ((o2.j && o2.j.message) || "완료");
+                  if (pw) pw.value = "";
+                  card.style.borderColor = "#aee0bf";
+                  card.style.background = "#f1faf3";
+                })
+                .catch(function (e) {
+                  st.style.color = "#9b2c2c";
+                  st.textContent = "⚠ " + (e.message || "실패");
+                  ok.disabled = no.disabled = false;
+                });
+            };
+          });
+        }
+        function ask(text) {
+          text = (text || "").trim();
+          if (!text || busy) return;
+          bubble("user", text);
+          msgs.push({ role: "user", content: text });
+          input.value = "";
+          busy = true;
+          send.disabled = true;
+          var b = bubble("ai", "분석 중…");
+          fetch("/api/admin/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              messages: msgs.slice(-8),
+              model: modelSel ? modelSel.value : undefined,
+            }),
+          })
+            .then(function (r) {
+              return r.json().then(function (j) {
+                return { ok: r.ok, j: j };
+              });
+            })
+            .then(function (o) {
+              if (!o.ok)
+                throw new Error((o.j && o.j.error) || "오류가 발생했어요.");
+              var ans = (o.j && o.j.answer) || "(응답이 없습니다.)";
+              b.textContent = ans;
+              box.scrollTop = box.scrollHeight;
+              msgs.push({ role: "assistant", content: ans });
+              var acts = (o.j && o.j.actions) || [];
+              if (acts.length) renderActions(acts);
+            })
+            .catch(function (e) {
+              b.style.cssText +=
+                "background:#fff4f4;border-color:#f3c0c0;color:#9b2c2c;";
+              b.textContent = e.message || "오류가 발생했어요.";
+            })
+            .then(function () {
+              busy = false;
+              send.disabled = false;
+              input.focus();
+            });
+        }
+        send.onclick = function () {
+          ask(input.value);
+        };
+        input.addEventListener("keydown", function (e) {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            ask(input.value);
+          }
+        });
+        var chips = document.getElementById("aaChips");
+        [
+          "최근 로그인 실패가 몰린 IP나 계정 있어?",
+          "최근 7일 사용량 통계 집계해줘",
+          "베타 기능 현황 보여줘",
+          "지금 rate-limit에 걸린 사용자 있어?",
+          "크레딧 0인데 최근 로그인한 사용자 있어?",
+          "최근 AI 도우미 피드백 요약해줘",
+        ].forEach(function (q) {
+          if (!chips) return;
+          var btn = document.createElement("button");
+          btn.className = "secondary compact";
+          btn.style.cssText = "font-size:12px;margin:0 6px 6px 0;";
+          btn.textContent = q;
+          btn.onclick = function () {
+            ask(q);
+          };
+          chips.appendChild(btn);
+        });
+      })();
+    </script>
+    <script>
+      (function () {
+        // ── 섹션 탭(한 번에 하나씩) ──
+        var TABMAP = {
+          "AI 관리자 보조": "ai",
+          "사용자 추가": "users",
+          "사용자 목록": "users",
+          "베타 기능": "beta",
+          "보고서 생성 로그": "logs",
+          "코드 에디터": "editor",
+        };
+        var sections = Array.prototype.slice.call(
+          document.querySelectorAll("section.settings-card")
+        );
+        sections.forEach(function (s) {
+          var h2 = s.querySelector("h2");
+          if (!h2) return;
+          Object.keys(TABMAP).forEach(function (k) {
+            if (h2.textContent.indexOf(k) >= 0)
+              s.setAttribute("data-atab", TABMAP[k]);
+          });
+        });
+        var tabBtns = Array.prototype.slice.call(
+          document.querySelectorAll("#adminTabs .atab")
+        );
+        function showTab(tab) {
+          sections.forEach(function (s) {
+            s.style.display = s.getAttribute("data-atab") === tab ? "" : "none";
+          });
+          tabBtns.forEach(function (b) {
+            b.classList.toggle("on", b.getAttribute("data-go") === tab);
+          });
+          try {
+            localStorage.setItem("adminTab", tab);
+          } catch (e) {}
+          if (tab === "editor") {
+            initEditor();
+            if (window.__ceCM)
+              setTimeout(function () {
+                window.__ceCM.refresh();
+              }, 30);
+          }
+        }
+        tabBtns.forEach(function (b) {
+          b.onclick = function () {
+            showTab(b.getAttribute("data-go"));
+          };
+        });
+        var start = "ai";
+        try {
+          var st = localStorage.getItem("adminTab");
+          if (st) start = st;
+        } catch (e) {}
+        if (!document.querySelector('#adminTabs .atab[data-go="' + start + '"]'))
+          start = "ai";
+        showTab(start);
+
+        // ── 코드 에디터(CodeMirror) ──
+        var cmReady = false;
+        function initEditor() {
+          if (cmReady) return;
+          cmReady = true;
+          if (typeof CodeMirror === "undefined") {
+            var ideEl = document.getElementById("ide");
+            if (ideEl)
+              ideEl.innerHTML =
+                '<div style="padding:16px;color:#bbb">에디터 로드 실패(네트워크 확인)</div>';
+            return;
+          }
+
+          var LANGS = {
+            javascript: { label: "JavaScript", mode: "javascript", ext: "js" },
+            htmlmixed: { label: "HTML", mode: "htmlmixed", ext: "html" },
+            css: { label: "CSS", mode: "css", ext: "css" },
+            python: { label: "Python", mode: "python", ext: "py" },
+            markdown: { label: "Markdown", mode: "markdown", ext: "md" },
+            "application/json": { label: "JSON", mode: "application/json", ext: "json" },
+          };
+          function modeOf(l) {
+            return LANGS[l] ? LANGS[l].mode : "javascript";
+          }
+          function langOfName(name) {
+            var ext = (String(name).split(".").pop() || "").toLowerCase();
+            for (var k in LANGS) if (LANGS[k].ext === ext) return k;
+            return "javascript";
+          }
+          function iconFor(l) {
+            return (
+              {
+                javascript: "🟨",
+                htmlmixed: "🟧",
+                css: "🟦",
+                python: "🐍",
+                markdown: "📝",
+                "application/json": "🔧",
+              }[l] || "📄"
+            );
+          }
+
+          var langSel = document.getElementById("ceLang");
+          var out = document.getElementById("ceOut");
+          var frame = document.getElementById("ceFrame");
+          var tabsEl = document.getElementById("ideTabs");
+          var filesEl = document.getElementById("ideFiles");
+          var statusPos = document.getElementById("stPos");
+          var stMsg = document.getElementById("stMsg");
+          var panel = document.getElementById("idePanel");
+
+          // ── 파일 모델(localStorage 영속) ──
+          var files, active;
+          try {
+            files = JSON.parse(localStorage.getItem("ceFiles") || "null");
+          } catch (e) {
+            files = null;
+          }
+          if (!files || !files.length) {
+            var legacy = "";
+            try {
+              legacy = localStorage.getItem("ceCode") || "";
+            } catch (e) {}
+            files = [
+              {
+                name: "scratch.js",
+                content:
+                  legacy ||
+                  '// VS Code 스타일 에디터 — 여러 파일·탭·자동완성(Ctrl/⌘+Space)\nconsole.log("안녕, Quilo!");\n',
+              },
+            ];
+          }
+          try {
+            active = parseInt(localStorage.getItem("ceActive"), 10) || 0;
+          } catch (e) {
+            active = 0;
+          }
+          if (active < 0 || active >= files.length) active = 0;
+          files.forEach(function (f) {
+            f.lang = f.lang || langOfName(f.name);
+            f.doc = CodeMirror.Doc(f.content || "", modeOf(f.lang));
+          });
+
+          var cm = CodeMirror.fromTextArea(document.getElementById("ceArea"), {
+            lineNumbers: true,
+            theme: "material-darker",
+            indentUnit: 2,
+            tabSize: 2,
+            lineWrapping: false,
+            matchBrackets: true,
+            autoCloseBrackets: true,
+            autoCloseTags: true,
+            styleActiveLine: true,
+            foldGutter: true,
+            gutters: ["CodeMirror-linenumbers", "CodeMirror-foldgutter"],
+            keyMap: "sublime",
+            extraKeys: {
+              "Ctrl-Space": "autocomplete",
+              "Cmd-Space": "autocomplete",
+              "Ctrl-/": "toggleComment",
+              "Cmd-/": "toggleComment",
+              "Ctrl-S": function () {
+                if (files[active] && files[active].handle) saveActiveToDisk();
+                else {
+                  persist();
+                  flash("로컬 저장됨");
+                }
+              },
+              "Cmd-S": function () {
+                if (files[active] && files[active].handle) saveActiveToDisk();
+                else {
+                  persist();
+                  flash("로컬 저장됨");
+                }
+              },
+              "Ctrl-Enter": function () {
+                runCurrent();
+              },
+              "Cmd-Enter": function () {
+                runCurrent();
+              },
+            },
+          });
+          window.__ceCM = cm;
+
+          function currentLang() {
+            return files[active] ? files[active].lang : "javascript";
+          }
+          function persist() {
+            try {
+              localStorage.setItem(
+                "ceFiles",
+                JSON.stringify(
+                  files.map(function (f) {
+                    return {
+                      name: f.name,
+                      lang: f.lang,
+                      content: f.doc.getValue(),
+                    };
+                  })
+                )
+              );
+              localStorage.setItem("ceActive", String(active));
+            } catch (e) {}
+          }
+          var flashT;
+          function flash(msg) {
+            if (!stMsg) return;
+            stMsg.textContent = msg;
+            clearTimeout(flashT);
+            flashT = setTimeout(function () {
+              stMsg.textContent = "";
+            }, 1500);
+          }
+          function updateStatus() {
+            var c = cm.getCursor();
+            statusPos.textContent = "Ln " + (c.line + 1) + ", Col " + (c.ch + 1);
+          }
+
+          function renderTabs() {
+            tabsEl.innerHTML = "";
+            files.forEach(function (f, i) {
+              var t = document.createElement("div");
+              t.className = "ide-tab" + (i === active ? " on" : "");
+              var ic = document.createElement("span");
+              ic.className = "ide-tab-ic";
+              ic.textContent = iconFor(f.lang);
+              var nm = document.createElement("span");
+              nm.className = "ide-tab-name";
+              nm.textContent = f.name;
+              var x = document.createElement("span");
+              x.className = "ide-tab-x";
+              x.textContent = f.dirty ? "●" : "×";
+              x.title = f.dirty ? "저장 안 됨 (Ctrl/⌘+S)" : "닫기";
+              x.onmouseenter = function () {
+                if (f.dirty) x.textContent = "×";
+              };
+              x.onmouseleave = function () {
+                if (f.dirty) x.textContent = "●";
+              };
+              x.onclick = function (e) {
+                e.stopPropagation();
+                closeFile(i);
+              };
+              t.appendChild(ic);
+              t.appendChild(nm);
+              t.appendChild(x);
+              t.onclick = function () {
+                openFile(i);
+              };
+              t.ondblclick = function () {
+                renameFile(i);
+              };
+              tabsEl.appendChild(t);
+            });
+          }
+          var folderEntries = [];
+          var folderName = "";
+          function renderExplorer() {
+            if (folderEntries.length) renderFolderList();
+            else renderFiles();
+          }
+          function renderFiles() {
+            filesEl.innerHTML = "";
+            files.forEach(function (f, i) {
+              var d = document.createElement("div");
+              d.className = "ide-file" + (i === active ? " on" : "");
+              d.textContent = iconFor(f.lang) + " " + f.name;
+              d.onclick = function () {
+                openFile(i);
+              };
+              d.ondblclick = function () {
+                renameFile(i);
+              };
+              filesEl.appendChild(d);
+            });
+          }
+          function renderFolderList() {
+            filesEl.innerHTML = "";
+            var head = document.createElement("div");
+            head.className = "ide-folder-name";
+            head.textContent = "📁 " + folderName + "  (닫기 ✕)";
+            head.title = "폴더 목록 닫기";
+            head.onclick = function () {
+              folderEntries = [];
+              folderName = "";
+              renderExplorer();
+            };
+            filesEl.appendChild(head);
+            folderEntries.forEach(function (en, idx) {
+              var d = document.createElement("div");
+              var paths = files.map(function (f) {
+                return f.path;
+              });
+              var openIdx = paths.indexOf(en.name);
+              d.className =
+                "ide-file" + (openIdx >= 0 && openIdx === active ? " on" : "");
+              d.textContent = iconFor(langOfName(en.name)) + " " + en.name;
+              d.title = en.name;
+              d.onclick = function () {
+                openFolderEntry(idx);
+              };
+              filesEl.appendChild(d);
+            });
+          }
+          function openFolderEntry(idx) {
+            var en = folderEntries[idx];
+            var existing = files
+              .map(function (f) {
+                return f.path;
+              })
+              .indexOf(en.name);
+            if (existing >= 0) {
+              openFile(existing);
+              return;
+            }
+            if (en.handle && en.handle.getFile) {
+              en.handle
+                .getFile()
+                .then(function (file) {
+                  return file.text();
+                })
+                .then(function (text) {
+                  var lang = langOfName(en.name);
+                  files.push({
+                    name: en.name.split("/").pop(),
+                    path: en.name,
+                    lang: lang,
+                    doc: CodeMirror.Doc(text, modeOf(lang)),
+                    handle: en.handle,
+                    dirty: false,
+                  });
+                  openFile(files.length - 1);
+                })
+                .catch(function (e) {
+                  flash("열기 실패: " + e.message);
+                });
+            }
+          }
+          function openFile(i) {
+            if (i < 0 || i >= files.length) return;
+            active = i;
+            cm.swapDoc(files[i].doc);
+            cm.setOption("mode", modeOf(files[i].lang));
+            if (langSel) langSel.value = files[i].lang;
+            renderTabs();
+            renderExplorer();
+            updateStatus();
+            persist();
+            renderMinimap();
+            cm.focus();
+          }
+          function addFile() {
+            var n = 1,
+              base;
+            do {
+              base = "untitled-" + n + ".js";
+              n++;
+            } while (
+              files.some(function (f) {
+                return f.name === base;
+              })
+            );
+            files.push({
+              name: base,
+              lang: "javascript",
+              doc: CodeMirror.Doc("", modeOf("javascript")),
+              handle: null,
+              dirty: false,
+            });
+            active = files.length - 1;
+            cm.swapDoc(files[active].doc);
+            cm.setOption("mode", modeOf("javascript"));
+            if (langSel) langSel.value = "javascript";
+            renderTabs();
+            renderExplorer();
+            updateStatus();
+            persist();
+            renameFile(active);
+          }
+          function closeFile(i) {
+            if (files.length <= 1) {
+              flash("마지막 파일은 닫을 수 없어요");
+              return;
+            }
+            files.splice(i, 1);
+            if (active >= files.length) active = files.length - 1;
+            else if (i < active) active--;
+            openFile(active);
+          }
+          function renameFile(i) {
+            var tab = tabsEl.children[i];
+            var nameSpan = tab ? tab.querySelector(".ide-tab-name") : null;
+            if (!nameSpan) return;
+            var input = document.createElement("input");
+            input.className = "ide-rename";
+            input.value = files[i].name;
+            var done = false;
+            function commit(save) {
+              if (done) return;
+              done = true;
+              if (save) {
+                var nm = (input.value || "").trim();
+                if (nm) {
+                  files[i].name = nm;
+                  files[i].lang = langOfName(nm);
+                  if (files[i].path) files[i].path = nm;
+                  if (i === active) {
+                    cm.setOption("mode", modeOf(files[i].lang));
+                    if (langSel) langSel.value = files[i].lang;
+                  }
+                }
+              }
+              renderTabs();
+              renderExplorer();
+              persist();
+              cm.focus();
+            }
+            input.onkeydown = function (e) {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                commit(true);
+              } else if (e.key === "Escape") {
+                e.preventDefault();
+                commit(false);
+              }
+            };
+            input.onblur = function () {
+              commit(true);
+            };
+            input.onclick = function (e) {
+              e.stopPropagation();
+            };
+            nameSpan.replaceWith(input);
+            input.focus();
+            input.select();
+          }
+
+          cm.on("cursorActivity", updateStatus);
+          cm.on("change", function () {
+            var f = files[active];
+            if (f && f.handle && !f.dirty) {
+              f.dirty = true;
+              renderTabs();
+            }
+            persist();
+            scheduleMinimap();
+          });
+
+          if (langSel)
+            langSel.onchange = function () {
+              files[active].lang = langSel.value;
+              cm.setOption("mode", modeOf(langSel.value));
+              renderTabs();
+              renderExplorer();
+              persist();
+            };
+          var newBtn = document.getElementById("ideNewFile");
+          if (newBtn) newBtn.onclick = addFile;
+
+          // ── 통합 패널(출력/미리보기/AI) ──
+          function showPanel(which) {
+            if (panel) panel.style.display = "flex";
+            ["output", "preview", "ai"].forEach(function (p) {
+              var btn = panel
+                ? panel.querySelector('[data-panel="' + p + '"]')
+                : null;
+              var pane = document.getElementById(
+                p === "output" ? "ceOut" : p === "preview" ? "ceFrame" : "ceAi"
+              );
+              if (btn) btn.classList.toggle("on", p === which);
+              if (pane) pane.classList.toggle("on", p === which);
+            });
+            cm.refresh();
+          }
+          if (panel) {
+            Array.prototype.forEach.call(
+              panel.querySelectorAll(".ide-panel-tabs [data-panel]"),
+              function (b) {
+                b.onclick = function () {
+                  showPanel(b.getAttribute("data-panel"));
+                };
+              }
+            );
+            var pClose = document.getElementById("idePanelClose");
+            if (pClose)
+              pClose.onclick = function () {
+                panel.style.display = "none";
+                cm.refresh();
+              };
+          }
+
+          function runCurrent() {
+            var code = cm.getValue();
+            var l = currentLang();
+            if (l === "javascript") {
+              var logs = [];
+              var orig = console.log;
+              console.log = function () {
+                logs.push(
+                  Array.prototype.map
+                    .call(arguments, function (a) {
+                      try {
+                        return typeof a === "object"
+                          ? JSON.stringify(a)
+                          : String(a);
+                      } catch (e) {
+                        return String(a);
+                      }
+                    })
+                    .join(" ")
+                );
+                try {
+                  orig.apply(console, arguments);
+                } catch (e) {}
+              };
+              var result;
+              try {
+                result = (0, eval)(code);
+              } catch (e) {
+                logs.push("⚠ " + (e && e.message ? e.message : e));
+              }
+              console.log = orig;
+              if (result !== undefined) {
+                try {
+                  logs.push(
+                    "→ " +
+                      (typeof result === "object"
+                        ? JSON.stringify(result)
+                        : String(result))
+                  );
+                } catch (e) {}
+              }
+              out.textContent = logs.join("\n") || "(출력 없음)";
+              showPanel("output");
+            } else if (l === "htmlmixed") {
+              frame.srcdoc = code;
+              showPanel("preview");
+            } else {
+              out.textContent =
+                "이 언어(" +
+                (LANGS[l] ? LANGS[l].label : l) +
+                ")는 브라우저에서 실행할 수 없어요. JavaScript나 HTML로 해보세요.";
+              showPanel("output");
+            }
+          }
+          var stRun = document.getElementById("stRun");
+          if (stRun) stRun.onclick = runCurrent;
+
+          // ── 액티비티 바 ──
+          Array.prototype.forEach.call(
+            document.querySelectorAll(".ide-activity [data-act]"),
+            function (b) {
+              b.onclick = function () {
+                var a = b.getAttribute("data-act");
+                if (a === "explorer") {
+                  var side = document.getElementById("ideSide");
+                  var show = side.style.display === "none";
+                  side.style.display = show ? "block" : "none";
+                  b.classList.toggle("on", show);
+                  cm.refresh();
+                } else if (a === "run") {
+                  runCurrent();
+                } else if (a === "ai") {
+                  showPanel("ai");
+                  var pe = document.getElementById("caPrompt");
+                  if (pe) pe.focus();
+                }
+              };
+            }
+          );
+
+          // ── 미니맵 ──
+          var ide = document.getElementById("ide");
+          var minimap = document.getElementById("ideMinimap");
+          var miniCode = document.getElementById("ideMiniCode");
+          var miniView = document.getElementById("ideMiniView");
+          var miniContentH = 0;
+          function renderMinimap() {
+            if (!miniCode || !ide || ide.classList.contains("nominimap")) return;
+            miniCode.style.transform = "";
+            miniCode.textContent = cm.getValue();
+            var natural = miniCode.scrollHeight || 1;
+            var ch = minimap.clientHeight || 1;
+            var scale = natural > ch ? ch / natural : 1;
+            miniCode.style.transform = "scaleY(" + scale + ")";
+            miniCode.style.transformOrigin = "left top";
+            miniContentH = natural * scale;
+            updateMiniView();
+          }
+          function updateMiniView() {
+            if (!miniView || !ide || ide.classList.contains("nominimap")) return;
+            var si = cm.getScrollInfo();
+            var h = si.height || 1;
+            miniView.style.top = (si.top / h) * miniContentH + "px";
+            miniView.style.height =
+              Math.max(14, (si.clientHeight / h) * miniContentH) + "px";
+          }
+          var miniT;
+          function scheduleMinimap() {
+            clearTimeout(miniT);
+            miniT = setTimeout(renderMinimap, 180);
+          }
+          if (minimap)
+            minimap.onclick = function (e) {
+              var si = cm.getScrollInfo();
+              var target =
+                (e.offsetY / (miniContentH || 1)) * si.height -
+                si.clientHeight / 2;
+              cm.scrollTo(null, Math.max(0, target));
+            };
+          cm.on("scroll", updateMiniView);
+          function applyMinimap(on) {
+            if (!ide) return;
+            ide.classList.toggle("nominimap", !on);
+            try {
+              localStorage.setItem("ceMinimap", on ? "1" : "0");
+            } catch (e) {}
+            cm.refresh();
+            if (on) renderMinimap();
+          }
+
+          // ── 라이트/다크 테마 ──
+          function applyTheme(light) {
+            if (!ide) return;
+            ide.classList.toggle("light", light);
+            cm.setOption("theme", light ? "eclipse" : "material-darker");
+            var tb = document.getElementById("stTheme");
+            if (tb) tb.textContent = light ? "☀" : "🌙";
+            try {
+              localStorage.setItem("ceTheme", light ? "light" : "dark");
+            } catch (e) {}
+            renderMinimap();
+          }
+
+          // ── 로컬 파일 (File System Access API; 미지원 시 업로드/다운로드 폴백) ──
+          var fileInput = document.getElementById("ideFileInput");
+          var hasFSA = !!window.showOpenFilePicker;
+          function addDiskFile(name, text, handle) {
+            var lang = langOfName(name);
+            files.push({
+              name: name,
+              lang: lang,
+              doc: CodeMirror.Doc(text, modeOf(lang)),
+              handle: handle || null,
+              dirty: false,
+            });
+            openFile(files.length - 1);
+            flash("열기: " + name);
+          }
+          function openLocalFiles() {
+            if (hasFSA) {
+              window
+                .showOpenFilePicker({ multiple: true })
+                .then(function (handles) {
+                  handles.forEach(function (h) {
+                    h.getFile().then(function (file) {
+                      file.text().then(function (text) {
+                        addDiskFile(file.name, text, h);
+                      });
+                    });
+                  });
+                })
+                .catch(function () {});
+            } else if (fileInput) {
+              fileInput.value = "";
+              fileInput.click();
+            }
+          }
+          if (fileInput)
+            fileInput.onchange = function () {
+              Array.prototype.forEach.call(fileInput.files, function (file) {
+                var r = new FileReader();
+                r.onload = function () {
+                  addDiskFile(file.name, String(r.result || ""), null);
+                };
+                r.readAsText(file);
+              });
+            };
+          function openLocalFolder() {
+            if (!window.showDirectoryPicker) {
+              flash("이 브라우저는 폴더 열기를 지원하지 않아요. '파일 열기'를 쓰세요.");
+              return;
+            }
+            window
+              .showDirectoryPicker()
+              .then(function (dir) {
+                var collected = [];
+                var SKIP = {
+                  node_modules: 1,
+                  ".git": 1,
+                  dist: 1,
+                  build: 1,
+                  ".next": 1,
+                  vendor: 1,
+                };
+                function walk(handle, prefix, depth) {
+                  if (collected.length >= 300 || depth > 6)
+                    return Promise.resolve();
+                  var it = handle.values();
+                  function next() {
+                    return it.next().then(function (res) {
+                      if (res.done || collected.length >= 300) return;
+                      var entry = res.value;
+                      var p = Promise.resolve();
+                      if (entry.kind === "directory") {
+                        if (!SKIP[entry.name] && entry.name.charAt(0) !== ".")
+                          p = walk(entry, prefix + entry.name + "/", depth + 1);
+                      } else {
+                        collected.push({ name: prefix + entry.name, handle: entry });
+                      }
+                      return p.then(next);
+                    });
+                  }
+                  return next();
+                }
+                flash("폴더 읽는 중…");
+                walk(dir, "", 0)
+                  .then(function () {
+                    folderEntries = collected;
+                    folderName = dir.name;
+                    renderExplorer();
+                    flash("폴더 열림: " + dir.name + " (" + collected.length + "개)");
+                  })
+                  .catch(function (e) {
+                    flash("폴더 읽기 실패: " + e.message);
+                  });
+              })
+              .catch(function () {});
+          }
+          function saveActiveToDisk() {
+            var f = files[active];
+            if (f.handle && f.handle.createWritable) {
+              f.handle
+                .createWritable()
+                .then(function (w) {
+                  return w.write(f.doc.getValue()).then(function () {
+                    return w.close();
+                  });
+                })
+                .then(function () {
+                  f.dirty = false;
+                  renderTabs();
+                  flash("저장됨 → " + f.name);
+                  persist();
+                })
+                .catch(function (e) {
+                  flash("저장 실패: " + e.message);
+                });
+            } else if (window.showSaveFilePicker) {
+              window
+                .showSaveFilePicker({ suggestedName: f.name })
+                .then(function (h) {
+                  return h
+                    .createWritable()
+                    .then(function (w) {
+                      return w.write(f.doc.getValue()).then(function () {
+                        return w.close();
+                      });
+                    })
+                    .then(function () {
+                      f.handle = h;
+                      f.name = h.name || f.name;
+                      f.lang = langOfName(f.name);
+                      f.dirty = false;
+                      cm.setOption("mode", modeOf(f.lang));
+                      if (langSel) langSel.value = f.lang;
+                      renderTabs();
+                      renderExplorer();
+                      flash("저장됨 → " + f.name);
+                      persist();
+                    });
+                })
+                .catch(function () {});
+            } else {
+              downloadActive();
+            }
+          }
+          function downloadActive() {
+            var f = files[active];
+            var blob = new Blob([f.doc.getValue()], {
+              type: "text/plain;charset=utf-8",
+            });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement("a");
+            a.href = url;
+            a.download = f.name;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(function () {
+              document.body.removeChild(a);
+              URL.revokeObjectURL(url);
+            }, 100);
+            flash("다운로드: " + f.name);
+          }
+
+          // ── 버튼 배선 + 초기 테마/미니맵 ──
+          var bOpen = document.getElementById("ideOpenFile");
+          if (bOpen) bOpen.onclick = openLocalFiles;
+          var bFolder = document.getElementById("ideOpenFolder");
+          if (bFolder) bFolder.onclick = openLocalFolder;
+          var bSave = document.getElementById("stSave");
+          if (bSave) bSave.onclick = saveActiveToDisk;
+          var bDl = document.getElementById("stDownload");
+          if (bDl) bDl.onclick = downloadActive;
+          var bTheme = document.getElementById("stTheme");
+          if (bTheme)
+            bTheme.onclick = function () {
+              applyTheme(!ide.classList.contains("light"));
+            };
+          var bMini = document.getElementById("stMinimap");
+          if (bMini)
+            bMini.onclick = function () {
+              applyMinimap(ide.classList.contains("nominimap"));
+            };
+          var savedTheme, savedMini;
+          try {
+            savedTheme = localStorage.getItem("ceTheme");
+            savedMini = localStorage.getItem("ceMinimap");
+          } catch (e) {}
+          applyMinimap(savedMini !== "0");
+          applyTheme(savedTheme === "light");
+
+          openFile(active);
+
+          // ── AI 코딩 도우미 (하이브리드 멀티모델) ──
+          (function setupAssist() {
+            var modelSel = document.getElementById("caModel");
+            var promptEl = document.getElementById("caPrompt");
+            var goBtn = document.getElementById("caGo");
+            var useCode = document.getElementById("caUseCode");
+            var resBox = document.getElementById("caResult");
+            var resText = document.getElementById("caText");
+            var resActions = document.getElementById("caActions");
+            var caHint = document.getElementById("caHint");
+            if (!modelSel || !goBtn) return;
+
+            fetch("/api/admin/code-assist/models")
+              .then(function (r) {
+                return r.json();
+              })
+              .then(function (d) {
+                var ms = (d && d.models) || [];
+                modelSel.innerHTML = "";
+                ms.forEach(function (m) {
+                  var o = document.createElement("option");
+                  o.value = m.id;
+                  o.textContent = m.label + (m.available ? "" : " (키 없음)");
+                  if (!m.available) o.disabled = true;
+                  modelSel.appendChild(o);
+                });
+                try {
+                  var sm = localStorage.getItem("caModel");
+                  if (
+                    sm &&
+                    ms.some(function (m) {
+                      return m.id === sm && m.available;
+                    })
+                  )
+                    modelSel.value = sm;
+                } catch (e) {}
+                var cur = ms.filter(function (m) {
+                  return m.id === modelSel.value;
+                })[0];
+                if (!cur || !cur.available) {
+                  var first = ms.filter(function (m) {
+                    return m.available;
+                  })[0];
+                  if (first) modelSel.value = first.id;
+                }
+                if (!ms.length) caHint.textContent = "사용 가능한 모델 없음";
+              })
+              .catch(function () {
+                caHint.textContent = "모델 목록 로드 실패";
+              });
+
+            modelSel.onchange = function () {
+              try {
+                localStorage.setItem("caModel", modelSel.value);
+              } catch (e) {}
+            };
+
+            function extractCode(t) {
+              var m = t.match(/```[a-zA-Z0-9_+\-/.]*\n([\s\S]*?)```/);
+              return m ? m[1].replace(/\n$/, "") : null;
+            }
+
+            function mkBtn(label, fn) {
+              var b = document.createElement("button");
+              b.textContent = label;
+              b.className = "secondary compact";
+              b.onclick = fn;
+              resActions.appendChild(b);
+              return b;
+            }
+            function setActions(code, fullText) {
+              resActions.innerHTML = "";
+              if (code != null) {
+                mkBtn("커서에 삽입", function () {
+                  cm.replaceSelection(code);
+                  cm.focus();
+                });
+                mkBtn("전체 교체", function () {
+                  cm.setValue(code);
+                  cm.focus();
+                });
+              }
+              mkBtn("복사", function (e) {
+                try {
+                  navigator.clipboard.writeText(code != null ? code : fullText);
+                  var t = e.target;
+                  t.textContent = "복사됨!";
+                  setTimeout(function () {
+                    t.textContent = "복사";
+                  }, 1200);
+                } catch (x) {}
+              });
+            }
+
+            goBtn.onclick = function () {
+              var prompt = (promptEl.value || "").trim();
+              if (!prompt) {
+                promptEl.focus();
+                return;
+              }
+              goBtn.disabled = true;
+              var origLabel = goBtn.textContent;
+              goBtn.textContent = "생성 중…";
+              caHint.textContent = "";
+              resBox.style.display = "block";
+              resText.textContent = "AI가 생각하는 중…";
+              resActions.innerHTML = "";
+              fetch("/api/admin/code-assist", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  prompt: prompt,
+                  code: useCode.checked ? cm.getValue() : "",
+                  lang: currentLang(),
+                  model: modelSel.value,
+                }),
+              })
+                .then(function (r) {
+                  return r.json().then(function (j) {
+                    return { ok: r.ok, j: j };
+                  });
+                })
+                .then(function (x) {
+                  if (!x.ok) {
+                    resText.textContent =
+                      "⚠ " + ((x.j && x.j.error) || "오류가 발생했습니다.");
+                    return;
+                  }
+                  var ans = (x.j && x.j.answer) || "(빈 응답)";
+                  resText.textContent = ans;
+                  caHint.textContent =
+                    x.j && x.j.model ? "모델: " + x.j.model : "";
+                  setActions(extractCode(ans), ans);
+                })
+                .catch(function (e) {
+                  resText.textContent =
+                    "⚠ 요청 실패: " + (e && e.message ? e.message : e);
+                })
+                .finally(function () {
+                  goBtn.disabled = false;
+                  goBtn.textContent = origLabel;
+                });
+            };
+
+            promptEl.addEventListener("keydown", function (e) {
+              if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+                e.preventDefault();
+                goBtn.click();
+              }
+            });
+          })();
+        }
+      })();
+    </script>
+</body>
 </html>

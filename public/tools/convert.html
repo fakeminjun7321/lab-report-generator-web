@@ -125,6 +125,7 @@
           <button type="button" data-tab="image">이미지 변환 · 압축</button>
           <button type="button" data-tab="pdf">PDF 도구</button>
           <button type="button" data-tab="equation">수식 변환 (LaTeX→한글)</button>
+          <button type="button" data-tab="docx2hwpx">Word → 한글 (DOCX→HWPX)</button>
         </div>
 
         <div class="conv-panel on" data-panel="file">
@@ -251,6 +252,22 @@
         <div class="conv-panel" data-panel="equation">
           <iframe class="conv-frame" data-src="/equation/index.html?embed=1" title="수식 변환"></iframe>
         </div>
+
+        <div class="conv-panel" data-panel="docx2hwpx">
+          <div class="tool-card">
+            <h3 style="margin:0 0 6px">Word(.docx) → 한글(.hwpx)</h3>
+            <p class="hint" style="margin:0 0 14px">
+              Word 문서를 한컴오피스에서 바로 열리는 <b>.hwpx</b>로 변환합니다(한컴에서 <b>.hwp</b>로 다시 저장 가능).
+              제목·표·목록·굵게/기울임·이미지는 그대로 옮기되, 정밀한 서식(자간 등)은 일부 달라질 수 있습니다.
+              변환은 우리 서버에서 처리합니다(로그인 필요).
+            </p>
+            <input type="file" id="d2hFile" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" aria-label="변환할 DOCX" />
+            <div style="margin-top:12px">
+              <button id="d2hBtn" class="btn btn-primary" type="button">한글(.hwpx)로 변환</button>
+            </div>
+            <p id="d2hStatus" class="hint" style="margin-top:10px; min-height:1.2em"></p>
+          </div>
+        </div>
       </section>
     </main>
 
@@ -281,6 +298,62 @@
             if (frame && !frame.src && frame.dataset.src)
               frame.src = frame.dataset.src;
           });
+        });
+      })();
+    </script>
+    <script>
+      // DOCX → HWPX: 파일을 서버(/api/convert-docx)로 보내 변환 후 .hwpx 다운로드.
+      (function () {
+        const f = document.getElementById("d2hFile");
+        const btn = document.getElementById("d2hBtn");
+        const st = document.getElementById("d2hStatus");
+        if (!f || !btn) return;
+        btn.addEventListener("click", async () => {
+          if (!f.files || !f.files.length) {
+            st.textContent = "DOCX 파일을 선택하세요.";
+            return;
+          }
+          const file = f.files[0];
+          if (!/\.docx$/i.test(file.name)) {
+            st.textContent = ".docx 파일만 지원합니다.";
+            return;
+          }
+          btn.disabled = true;
+          st.textContent = "⏳ 변환 중... (문서가 크면 몇 초 걸립니다)";
+          try {
+            const fd = new FormData();
+            fd.append("docx", file);
+            const r = await fetch("/api/convert-docx", {
+              method: "POST",
+              body: fd,
+            });
+            if (r.status === 401) {
+              st.innerHTML =
+                '로그인이 필요합니다. <a href="/login.html">로그인</a>';
+              return;
+            }
+            if (!r.ok) {
+              let msg = "변환에 실패했습니다.";
+              try {
+                msg = (await r.json()).error || msg;
+              } catch {}
+              st.textContent = "⚠ " + msg;
+              return;
+            }
+            const blob = await r.blob();
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = file.name.replace(/\.docx$/i, ".hwpx");
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+            st.textContent = "✓ 변환 완료 — .hwpx 파일이 다운로드되었습니다.";
+          } catch (e) {
+            st.textContent = "오류: " + (e.message || e);
+          } finally {
+            btn.disabled = false;
+          }
         });
       })();
     </script>

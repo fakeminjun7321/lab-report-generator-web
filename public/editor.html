@@ -1,0 +1,871 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <title>Quilo Code (베타)</title>
+    <link rel="icon" href="/favicon.ico" />
+    <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0/min/vs/loader.js"></script>
+    <style>
+      *{box-sizing:border-box}
+      html,body{height:100%;margin:0}
+      body{background:#1e1e1e;color:#ccc;font-family:-apple-system,system-ui,"Segoe UI",sans-serif;overflow:hidden}
+      .gate{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:10px;text-align:center;padding:20px;color:#bbb}
+      .qbtn{display:inline-flex;align-items:center;gap:7px;justify-content:center;background:#2d2d2d;color:#e8e8e8;border:1px solid #3c3c3c;border-radius:8px;padding:9px 16px;font:inherit;font-size:14px;cursor:pointer;text-decoration:none}
+      .qbtn:hover{background:#3a3a3a}
+      .qbtn-primary{background:#0e639c;border-color:#0e639c;color:#fff}
+      .qbtn-primary:hover{background:#1177bb}
+      .qbtn-ghost{background:transparent;border-color:transparent;color:#9aa}
+
+      .qide{position:fixed;inset:0;display:flex;flex-direction:column;background:#1e1e1e;color:#ccc;font-family:Menlo,Consolas,"Courier New",monospace}
+      .qt-titlebar{height:34px;flex:0 0 auto;background:#323233;display:flex;align-items:center;justify-content:center;color:#ccc;font-size:12.5px;font-family:-apple-system,system-ui,sans-serif;border-bottom:1px solid #1a1a1a}
+      .qt-title{font-weight:600}
+      .qt-beta{background:#0e639c;color:#fff;border-radius:10px;font-size:10px;padding:1px 7px;margin-left:7px;vertical-align:middle}
+      .qt-body{display:flex;flex:1;min-height:0}
+      .ide-activity{width:50px;background:#333;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 0;flex:0 0 auto}
+      .ide-activity button{width:42px;height:42px;background:none;border:none;color:#858585;font-size:19px;cursor:pointer;border-left:2px solid transparent}
+      .ide-activity button:hover{color:#fff}
+      .ide-activity button.on{color:#fff;border-left-color:#007acc}
+      .ide-side{width:230px;background:#252526;overflow:auto;flex:0 0 auto;border-right:1px solid #1a1a1a}
+      .ide-side-head{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#bbb}
+      .ide-side-actions{display:flex;gap:1px}
+      .ide-side-head button{background:none;border:none;color:#bbb;font-size:15px;cursor:pointer;line-height:1}
+      .ide-file{padding:5px 14px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#ccc;font-size:13px}
+      .ide-file:hover{background:#2a2d2e}
+      .ide-file.on{background:#37373d}
+      .ide-folder-name{padding:6px 12px;font-size:11px;color:#bbb;cursor:pointer;border-bottom:1px solid #1a1a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .ide-main{flex:1;display:flex;flex-direction:column;min-width:0}
+      .ide-tabs{display:flex;background:#252526;height:36px;overflow-x:auto;flex:0 0 auto}
+      .ide-tab{display:flex;align-items:center;gap:6px;padding:0 11px;height:36px;background:#2d2d2d;color:#969696;border-right:1px solid #1a1a1a;cursor:pointer;white-space:nowrap;font-size:12.5px}
+      .ide-tab.on{background:#1e1e1e;color:#fff;box-shadow:inset 0 2px 0 #007acc}
+      .ide-tab-ic{font-size:10px}
+      .ide-tab-name{pointer-events:none}
+      .ide-tab-x{opacity:.5;font-size:15px;width:16px;text-align:center;border-radius:4px}
+      .ide-tab-x:hover{opacity:1;background:#ffffff22}
+      input.ide-rename{background:#3c3c3c;color:#fff;border:1px solid #007acc;border-radius:3px;font:inherit;font-size:12.5px;width:130px;padding:1px 5px;outline:none}
+      .ide-stage{flex:1;min-height:0;position:relative}
+      .ide-monaco{position:absolute;inset:0}
+      .ide-welcome{position:absolute;inset:0;background:#1e1e1e;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;font-family:-apple-system,system-ui,sans-serif;z-index:5}
+      .ide-welcome-logo{width:84px;height:84px;border-radius:20px;background:linear-gradient(135deg,#0e639c,#1f9cf0);color:#fff;display:flex;align-items:center;justify-content:center;font-size:46px;font-weight:800;margin-bottom:6px}
+      .ide-welcome-title{font-size:26px;font-weight:700;color:#eee}
+      .ide-welcome-sub{font-size:13.5px;color:#9aa;margin-bottom:14px;max-width:430px;line-height:1.6}
+      .ide-welcome .qbtn{width:280px}
+      .ide-panel{height:200px;flex:0 0 auto;display:flex;flex-direction:column;border-top:1px solid #2b2b2b;background:#1e1e1e}
+      .ide-panel-tabs{display:flex;align-items:center;gap:2px;height:30px;background:#252526;padding:0 6px;flex:0 0 auto}
+      .ide-panel-tabs button{background:none;border:none;color:#969696;font-size:11.5px;letter-spacing:.04em;text-transform:uppercase;padding:6px 10px;cursor:pointer;border-bottom:1px solid transparent}
+      .ide-panel-tabs button.on{color:#fff;border-bottom-color:#007acc}
+      .ide-panel-body{flex:1;min-height:0;position:relative}
+      .ide-pane{display:none;position:absolute;inset:0;width:100%;height:100%;margin:0;overflow:auto;box-sizing:border-box}
+      .ide-pane.on{display:block}
+      pre#ceOut{padding:10px 12px;color:#d4d4d4;font-family:Menlo,Consolas,monospace;font-size:12.5px;white-space:pre-wrap;word-break:break-word}
+      iframe#ceFrame{border:none;background:#fff}
+      .ide-agent{width:340px;flex:0 0 auto;display:flex;flex-direction:column;background:#202021;border-left:1px solid #1a1a1a}
+      .qide.noagent .ide-agent{display:none}
+      .ide-agent-head{height:38px;display:flex;align-items:center;gap:6px;padding:0 12px;font-family:-apple-system,system-ui,sans-serif;font-size:13px;font-weight:600;color:#ddd;border-bottom:1px solid #1a1a1a}
+      .ide-agent-head button{background:none;border:none;color:#9aa;font-size:14px;cursor:pointer}
+      .ide-agent-msgs{flex:1;min-height:0;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:9px;font-family:-apple-system,system-ui,sans-serif}
+      .ide-agent-empty{color:#777;font-size:12.5px;text-align:center;margin:auto;line-height:1.7}
+      .ag-bubble{padding:8px 11px;border-radius:11px;font-size:13px;line-height:1.55;white-space:pre-wrap;word-break:break-word;max-width:95%}
+      .ag-user{align-self:flex-end;background:#0e639c;color:#fff}
+      .ag-ai{align-self:flex-start;background:#2b2b2c;border:1px solid #3a3a3a;color:#e0e0e0}
+      .ag-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+      .ag-actions button{background:#3c3c3c;color:#e4e4e4;border:1px solid #555;border-radius:6px;padding:4px 9px;font-size:11.5px;cursor:pointer}
+      .ide-agent-input{flex:0 0 auto;border-top:1px solid #1a1a1a;padding:9px}
+      .ide-agent-input textarea{width:100%;box-sizing:border-box;background:#3c3c3c;color:#e8e8e8;border:1px solid #4a4a4a;border-radius:8px;font:inherit;font-family:-apple-system,system-ui,sans-serif;font-size:13px;padding:8px 10px;resize:none}
+      .ide-agent-bar{display:flex;align-items:center;gap:8px;margin-top:7px}
+      .ide-agent-bar select{flex:1;background:#3c3c3c;color:#ddd;border:1px solid #4a4a4a;border-radius:7px;font:inherit;font-family:-apple-system,system-ui,sans-serif;font-size:12px;padding:5px 7px;min-width:0}
+      .ide-agent-bar button{width:34px;height:30px;flex:0 0 auto;background:#0e639c;color:#fff;border:none;border-radius:7px;font-size:15px;cursor:pointer}
+      .ide-statusbar{height:24px;flex:0 0 auto;background:#007acc;color:#fff;display:flex;align-items:center;gap:14px;padding:0 12px;font-size:12px;font-family:-apple-system,system-ui,sans-serif}
+      .ide-statusbar span[id]{cursor:default}
+      .ide-statusbar #stRun,.ide-statusbar #stSave,.ide-statusbar #stDownload,.ide-statusbar #stPip,.ide-statusbar #stMinimap,.ide-statusbar #stTheme{cursor:pointer}
+      .ide-statusbar #stMsg{color:#cfe9ff}
+      .ide-statusbar select.ide-lang{background:transparent;color:#fff;border:none;font:inherit;font-size:12px;cursor:pointer}
+      .ide-statusbar select.ide-lang option{color:#000}
+      /* 라이트 테마(셸) — Monaco 자체는 'vs' 테마로 전환 */
+      .qide.light{background:#fff;color:#333}
+      .qide.light .qt-titlebar{background:#dddddd;color:#333;border-bottom-color:#ccc}
+      .qide.light .ide-activity{background:#e8e8e8}
+      .qide.light .ide-activity button{color:#666}
+      .qide.light .ide-activity button:hover,.qide.light .ide-activity button.on{color:#111}
+      .qide.light .ide-side{background:#f3f3f3;border-right-color:#e0e0e0}
+      .qide.light .ide-side-head,.qide.light .ide-side-head button,.qide.light .ide-folder-name{color:#555}
+      .qide.light .ide-file{color:#333}
+      .qide.light .ide-file:hover{background:#e4e6eb}
+      .qide.light .ide-file.on{background:#dcdfe6}
+      .qide.light .ide-tabs{background:#ececec}
+      .qide.light .ide-tab{background:#e4e4e4;color:#555;border-right-color:#dcdcdc}
+      .qide.light .ide-tab.on{background:#fff;color:#111}
+      .qide.light .ide-stage,.qide.light .ide-welcome{background:#fff}
+      .qide.light .ide-welcome-title{color:#222}
+      .qide.light .ide-panel{background:#fff;border-top-color:#e0e0e0}
+      .qide.light .ide-panel-tabs{background:#ececec}
+      .qide.light .ide-panel-tabs button{color:#555}
+      .qide.light .ide-panel-tabs button.on{color:#111}
+      .qide.light pre#ceOut{color:#222}
+      .qide.light .ide-agent{background:#f6f7f9;border-left-color:#e0e0e0}
+      .qide.light .ide-agent-head{color:#333;border-bottom-color:#e0e0e0}
+      .qide.light .ag-ai{background:#fff;border-color:#e0e0e0;color:#222}
+      .qide.light .ide-agent-input{border-top-color:#e0e0e0}
+      .qide.light .ide-agent-input textarea,.qide.light .ide-agent-bar select{background:#fff;color:#222;border-color:#ccc}
+      @media (max-width:820px){.ide-agent{width:280px}.ide-side{width:180px}}
+    </style>
+  </head>
+  <body>
+    <div id="gate" class="gate">권한 확인 중…</div>
+
+    <div id="app" class="qide" style="display:none">
+      <div class="qt-titlebar"><span class="qt-title">Quilo Code <span class="qt-beta">베타</span></span></div>
+      <div class="qt-body">
+        <div class="ide-activity">
+          <button data-act="explorer" class="on" title="탐색기">🗂</button>
+          <button data-act="run" title="실행 (Ctrl/⌘+Enter)">▶</button>
+          <button data-act="agent" class="on" title="Agent (AI)">✨</button>
+          <span style="flex:1"></span>
+          <button data-act="home" title="메인으로">🏠</button>
+        </div>
+        <div class="ide-side" id="ideSide">
+          <div class="ide-side-head">
+            <span>탐색기</span>
+            <span class="ide-side-actions">
+              <button id="ideOpenFile" title="로컬 파일 열기">📂</button>
+              <button id="ideOpenFolder" title="로컬 폴더 열기">📁</button>
+              <button id="ideNewFile" title="새 파일">＋</button>
+            </span>
+          </div>
+          <div id="ideFiles"></div>
+        </div>
+        <div class="ide-main">
+          <div class="ide-tabs" id="ideTabs"></div>
+          <div class="ide-stage">
+            <div class="ide-monaco" id="monaco"></div>
+            <div class="ide-welcome" id="ideWelcome">
+              <div class="ide-welcome-logo">Q</div>
+              <div class="ide-welcome-title">Quilo Code</div>
+              <div class="ide-welcome-sub">VS Code 엔진(Monaco) 기반 코드 에디터입니다. 자동완성·미니맵·찾기(Ctrl/⌘+F)·멀티커서가 내장돼 있고, 내 로컬 파일을 직접 편집·저장하고 Python도 실행됩니다.</div>
+              <button class="qbtn qbtn-primary" id="wOpenFolder">📁 폴더 열기</button>
+              <button class="qbtn" id="wOpenFile">📂 파일 열기</button>
+              <button class="qbtn qbtn-ghost" id="wStart">빈 파일로 시작 →</button>
+            </div>
+          </div>
+          <div class="ide-panel" id="idePanel" style="display:none">
+            <div class="ide-panel-tabs">
+              <button data-panel="output" class="on">출력</button>
+              <button data-panel="preview">미리보기</button>
+              <span style="flex:1"></span>
+              <button id="idePanelClose" title="패널 접기">▾</button>
+            </div>
+            <div class="ide-panel-body">
+              <pre id="ceOut" class="ide-pane on">▶ 실행(또는 Ctrl/⌘+Enter)을 누르면 결과가 여기에 표시됩니다.</pre>
+              <iframe id="ceFrame" class="ide-pane" title="미리보기"></iframe>
+            </div>
+          </div>
+        </div>
+        <div class="ide-agent" id="ideAgent">
+          <div class="ide-agent-head">
+            <span>✨ Agent</span><span style="flex:1"></span>
+            <button id="agentClear" title="대화 비우기">🗑</button>
+            <button id="agentClose" title="닫기">✕</button>
+          </div>
+          <div class="ide-agent-msgs" id="agentMsgs">
+            <div class="ide-agent-empty">코드에 대해 무엇이든 물어보세요.<br />예: 이 함수 버그 고쳐줘 · 정렬 함수 짜줘 · 이 코드 설명해줘</div>
+          </div>
+          <div class="ide-agent-input">
+            <textarea id="agentPrompt" rows="2" placeholder="무엇이든 물어보세요  (현재 파일 자동 첨부 · Ctrl/⌘+Enter)"></textarea>
+            <div class="ide-agent-bar">
+              <select id="agentModel" title="AI 모델"></select>
+              <button id="agentSend" title="보내기 (Ctrl/⌘+Enter)">↑</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="ide-statusbar">
+        <span id="stRun" title="실행 (Ctrl/⌘+Enter)">▶ 실행</span>
+        <span id="stSave" title="디스크에 저장 (Ctrl/⌘+S)">💾 저장</span>
+        <span id="stDownload" title="현재 파일 다운로드">⬇ 다운로드</span>
+        <span id="stPip" title="Python 패키지 설치 (pip / micropip)">📦 pip</span>
+        <span id="stFormat" title="문서 포맷 (Shift+⌥+F)">⌗ 포맷</span>
+        <span id="stMsg"></span>
+        <span style="flex:1"></span>
+        <span id="stPos">Ln 1, Col 1</span>
+        <select id="ceLang" class="ide-lang" title="언어">
+          <option value="javascript">JavaScript</option>
+          <option value="htmlmixed">HTML</option>
+          <option value="css">CSS</option>
+          <option value="python">Python</option>
+          <option value="markdown">Markdown</option>
+          <option value="application/json">JSON</option>
+        </select>
+        <span id="stMinimap" title="미니맵 토글">🗺</span>
+        <span id="stTheme" title="라이트/다크 전환">🌙</span>
+        <span>UTF-8</span>
+      </div>
+      <input type="file" id="ideFileInput" multiple hidden />
+    </div>
+
+    <script>
+      function showGate(html) {
+        var g = document.getElementById("gate");
+        g.innerHTML = html; g.style.display = "flex";
+      }
+      var MONACO_BASE = "https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0/min/";
+      // 접근 게이트: 로그인 + (관리자 또는 'code-editor' 베타 테스터)
+      (async function guard() {
+        try {
+          var res = await fetch("/api/me");
+          if (res.status === 401) {
+            showGate('<p>로그인이 필요합니다.</p><a class="qbtn qbtn-primary" href="/login.html">로그인</a>');
+            return;
+          }
+          var me = await res.json();
+          var allowed = !!me.isAdmin;
+          if (!allowed) {
+            try {
+              var b = await fetch("/api/me/beta").then(function (r) { return r.json(); });
+              allowed = Array.isArray(b.features) && b.features.indexOf("code-editor") >= 0;
+            } catch (e) {}
+          }
+          if (!allowed) {
+            showGate('<p>🧩 <b>Quilo Code</b>는 현재 <b>베타 테스터</b>에게만 열려 있습니다.<br>사용을 원하면 운영자에게 요청하세요.</p><a class="qbtn" href="/">메인으로</a>');
+            return;
+          }
+          loadMonaco();
+        } catch (e) { showGate("<p>권한 확인 중 오류가 발생했습니다.</p>"); }
+      })();
+
+      function loadMonaco() {
+        showGate("Monaco(VS Code 엔진) 로딩 중…");
+        window.MonacoEnvironment = {
+          getWorkerUrl: function () {
+            return ("data:text/javascript;charset=utf-8," + encodeURIComponent(
+              "self.MonacoEnvironment={baseUrl:'" + MONACO_BASE + "'};" +
+              "importScripts('" + MONACO_BASE + "vs/base/worker/workerMain.js');"
+            ));
+          },
+        };
+        try {
+          require.config({ paths: { vs: MONACO_BASE + "vs" } });
+          require(["vs/editor/editor.main"], function () {
+            document.getElementById("gate").style.display = "none";
+            document.getElementById("app").style.display = "flex";
+            initEditor();
+          });
+        } catch (e) {
+          showGate("<p>에디터 로드 실패(네트워크 확인): " + (e && e.message ? e.message : e) + "</p>");
+        }
+      }
+
+      function initEditor() {
+        var LANGS = {
+          javascript: { mono: "javascript", ext: "js", label: "JavaScript" },
+          htmlmixed: { mono: "html", ext: "html", label: "HTML" },
+          css: { mono: "css", ext: "css", label: "CSS" },
+          python: { mono: "python", ext: "py", label: "Python" },
+          markdown: { mono: "markdown", ext: "md", label: "Markdown" },
+          "application/json": { mono: "json", ext: "json", label: "JSON" },
+        };
+        function monoOf(l) { return LANGS[l] ? LANGS[l].mono : "plaintext"; }
+        function langOfName(name) {
+          var ext = (String(name).split(".").pop() || "").toLowerCase();
+          for (var k in LANGS) if (LANGS[k].ext === ext) return k;
+          return "javascript";
+        }
+        function iconFor(l) {
+          return ({ javascript: "🟨", htmlmixed: "🟧", css: "🟦", python: "🐍", markdown: "📝", "application/json": "🔧" }[l] || "📄");
+        }
+
+        var ide = document.getElementById("app");
+        var langSel = document.getElementById("ceLang");
+        var out = document.getElementById("ceOut");
+        var frame = document.getElementById("ceFrame");
+        var tabsEl = document.getElementById("ideTabs");
+        var filesEl = document.getElementById("ideFiles");
+        var statusPos = document.getElementById("stPos");
+        var stMsg = document.getElementById("stMsg");
+        var panel = document.getElementById("idePanel");
+        var welcome = document.getElementById("ideWelcome");
+
+        // Python 자동완성: Python 런타임을 한 번 실행하면(또는 pip) jedi 가 깔려
+        // 실제 문맥 기반 자동완성(모듈 멤버·내 함수/변수)이 됩니다. 그 전엔 키워드 제안.
+        var jediReady = null, jediOk = false;
+        var PY_KW = ["def","class","return","import","from","as","if","elif","else","for","while","try","except","finally","with","lambda","pass","break","continue","global","nonlocal","yield","async","await","raise","assert","del","in","is","and","or","not","True","False","None","self","print","len","range","int","str","float","bool","list","dict","set","tuple","open","enumerate","zip","map","filter","sorted","reversed","sum","min","max","abs","round","input","type","isinstance","format"];
+        function pyKeywordSuggestions(model, position) {
+          var w = model.getWordUntilPosition(position);
+          var range = { startLineNumber: position.lineNumber, endLineNumber: position.lineNumber, startColumn: w.startColumn, endColumn: w.endColumn };
+          return PY_KW.map(function (k) {
+            return { label: k, kind: monaco.languages.CompletionItemKind.Keyword, insertText: k, range: range };
+          });
+        }
+        function jediKind(t) {
+          var M = monaco.languages.CompletionItemKind;
+          return ({ module: M.Module, "class": M.Class, "function": M.Function, instance: M.Variable, statement: M.Variable, param: M.Variable, property: M.Property, keyword: M.Keyword, path: M.File }[t]) || M.Text;
+        }
+        monaco.languages.registerCompletionItemProvider("python", {
+          triggerCharacters: ["."],
+          provideCompletionItems: function (model, position) {
+            var w = model.getWordUntilPosition(position);
+            var range = { startLineNumber: position.lineNumber, endLineNumber: position.lineNumber, startColumn: w.startColumn, endColumn: w.endColumn };
+            if (jediOk && window.__qpy && window.__qpy.globals) {
+              try {
+                var fn = window.__qpy.globals.get("_qc");
+                var res = fn(model.getValue(), position.lineNumber, position.column - 1);
+                if (fn.destroy) fn.destroy();
+                var arr = JSON.parse(res);
+                if (arr && arr.length) {
+                  return { suggestions: arr.map(function (c) {
+                    return { label: c.n, kind: jediKind(c.t), insertText: c.n, range: range, detail: c.t };
+                  }) };
+                }
+              } catch (e) {}
+            }
+            return { suggestions: pyKeywordSuggestions(model, position) };
+          },
+        });
+
+        var files, active, folderEntries = [], folderName = "";
+        try { files = JSON.parse(localStorage.getItem("ceFiles") || "null"); } catch (e) { files = null; }
+        if (!files || !files.length) {
+          files = [{ name: "scratch.js", content: '// Quilo Code (Monaco) — 자동완성: 입력 중 자동, 또는 Ctrl/⌘+Space.\n// 로컬 파일 열기 📂 · Python 실행 ▶ · 라이브러리 📦 pip\nconsole.log("안녕, Quilo!");\n' }];
+        }
+        try { active = parseInt(localStorage.getItem("ceActive"), 10) || 0; } catch (e) { active = 0; }
+        if (active < 0 || active >= files.length) active = 0;
+        files.forEach(function (f) {
+          f.lang = f.lang || langOfName(f.name);
+          f.model = monaco.editor.createModel(f.content || "", monoOf(f.lang));
+        });
+
+        var savedTheme; try { savedTheme = localStorage.getItem("ceTheme"); } catch (e) {}
+        var savedMini; try { savedMini = localStorage.getItem("ceMinimap"); } catch (e) {}
+        var editor = monaco.editor.create(document.getElementById("monaco"), {
+          model: files[active].model,
+          theme: savedTheme === "light" ? "vs" : "vs-dark",
+          automaticLayout: true,
+          fontSize: 14,
+          fontFamily: "Menlo, Consolas, 'Courier New', monospace",
+          tabSize: 2,
+          insertSpaces: true,
+          minimap: { enabled: savedMini !== "0" },
+          scrollBeyondLastLine: false,
+          smoothScrolling: true,
+          cursorBlinking: "smooth",
+          quickSuggestions: true,
+          suggestOnTriggerCharacters: true,
+          wordBasedSuggestions: "allDocuments",
+          tabCompletion: "on",
+          bracketPairColorization: { enabled: true },
+          renderWhitespace: "selection",
+          padding: { top: 8 },
+          formatOnPaste: true,
+          formatOnType: true,
+          autoIndent: "full",
+          autoClosingBrackets: "always",
+          autoClosingQuotes: "always",
+          autoSurround: "languageDefined",
+          matchBrackets: "always",
+          renderLineHighlight: "all",
+          cursorSmoothCaretAnimation: "on",
+          linkedEditing: true,
+          showFoldingControls: "always",
+          stickyScroll: { enabled: true },
+          guides: { bracketPairs: true, indentation: true },
+          suggest: { showWords: true, preview: true, shareSuggestSelections: true },
+        });
+        window.__qed = editor;
+        if (savedTheme === "light") ide.classList.add("light");
+        document.getElementById("stTheme").textContent = savedTheme === "light" ? "☀" : "🌙";
+
+        function currentLang() { return files[active] ? files[active].lang : "javascript"; }
+        function curValue() { return editor.getValue(); }
+        function persist() {
+          try {
+            localStorage.setItem("ceFiles", JSON.stringify(files.map(function (f) {
+              return { name: f.name, lang: f.lang, content: f.model.getValue() };
+            })));
+            localStorage.setItem("ceActive", String(active));
+          } catch (e) {}
+        }
+        var flashT;
+        function flash(msg) { stMsg.textContent = msg; clearTimeout(flashT); flashT = setTimeout(function () { stMsg.textContent = ""; }, 1600); }
+        function saveOrLocal() {
+          if (files[active] && files[active].handle) saveActiveToDisk();
+          else { persist(); flash("로컬 저장됨"); }
+        }
+
+        function renderTabs() {
+          tabsEl.innerHTML = "";
+          files.forEach(function (f, i) {
+            var t = document.createElement("div");
+            t.className = "ide-tab" + (i === active ? " on" : "");
+            var ic = document.createElement("span"); ic.className = "ide-tab-ic"; ic.textContent = iconFor(f.lang);
+            var nm = document.createElement("span"); nm.className = "ide-tab-name"; nm.textContent = f.name;
+            var x = document.createElement("span"); x.className = "ide-tab-x";
+            x.textContent = f.dirty ? "●" : "×"; x.title = f.dirty ? "저장 안 됨 (Ctrl/⌘+S)" : "닫기";
+            x.onmouseenter = function () { if (f.dirty) x.textContent = "×"; };
+            x.onmouseleave = function () { if (f.dirty) x.textContent = "●"; };
+            x.onclick = function (e) { e.stopPropagation(); closeFile(i); };
+            t.appendChild(ic); t.appendChild(nm); t.appendChild(x);
+            t.onclick = function () { openFile(i); };
+            t.ondblclick = function () { renameFile(i); };
+            tabsEl.appendChild(t);
+          });
+        }
+        function renderExplorer() { if (folderEntries.length) renderFolderList(); else renderFiles(); }
+        function renderFiles() {
+          filesEl.innerHTML = "";
+          files.forEach(function (f, i) {
+            var d = document.createElement("div");
+            d.className = "ide-file" + (i === active ? " on" : "");
+            d.textContent = iconFor(f.lang) + " " + f.name;
+            d.onclick = function () { openFile(i); };
+            d.ondblclick = function () { renameFile(i); };
+            filesEl.appendChild(d);
+          });
+        }
+        function renderFolderList() {
+          filesEl.innerHTML = "";
+          var head = document.createElement("div");
+          head.className = "ide-folder-name"; head.textContent = "📁 " + folderName + "  (닫기 ✕)";
+          head.title = "폴더 목록 닫기";
+          head.onclick = function () { folderEntries = []; folderName = ""; renderExplorer(); };
+          filesEl.appendChild(head);
+          folderEntries.forEach(function (en, idx) {
+            var d = document.createElement("div");
+            var openIdx = files.map(function (f) { return f.path; }).indexOf(en.name);
+            d.className = "ide-file" + (openIdx >= 0 && openIdx === active ? " on" : "");
+            d.textContent = iconFor(langOfName(en.name)) + " " + en.name; d.title = en.name;
+            d.onclick = function () { openFolderEntry(idx); };
+            filesEl.appendChild(d);
+          });
+        }
+        function openFolderEntry(idx) {
+          var en = folderEntries[idx];
+          var existing = files.map(function (f) { return f.path; }).indexOf(en.name);
+          if (existing >= 0) { openFile(existing); return; }
+          if (en.handle && en.handle.getFile) {
+            en.handle.getFile().then(function (file) { return file.text(); }).then(function (text) {
+              var lang = langOfName(en.name);
+              files.push({ name: en.name.split("/").pop(), path: en.name, lang: lang, model: monaco.editor.createModel(text, monoOf(lang)), handle: en.handle, dirty: false });
+              attachModel(files[files.length - 1]);
+              hideWelcome(); openFile(files.length - 1);
+            }).catch(function (e) { flash("열기 실패: " + e.message); });
+          }
+        }
+        function attachModel(f) {
+          f.model.onDidChangeContent(function () {
+            if (f.handle && !f.dirty) { f.dirty = true; renderTabs(); }
+            persist();
+          });
+        }
+        files.forEach(attachModel);
+
+        function openFile(i) {
+          if (i < 0 || i >= files.length) return;
+          active = i;
+          editor.setModel(files[i].model);
+          langSel.value = files[i].lang;
+          renderTabs(); renderExplorer(); persist();
+          editor.focus();
+        }
+        function addFile() {
+          var n = 1, base;
+          do { base = "untitled-" + n + ".js"; n++; } while (files.some(function (f) { return f.name === base; }));
+          var f = { name: base, lang: "javascript", model: monaco.editor.createModel("", "javascript"), handle: null, dirty: false };
+          files.push(f); attachModel(f);
+          active = files.length - 1; editor.setModel(f.model); langSel.value = "javascript";
+          hideWelcome(); renderTabs(); renderExplorer(); persist(); renameFile(active);
+        }
+        function closeFile(i) {
+          if (files.length <= 1) { flash("마지막 파일은 닫을 수 없어요"); return; }
+          try { files[i].model.dispose(); } catch (e) {}
+          files.splice(i, 1);
+          if (active >= files.length) active = files.length - 1;
+          else if (i < active) active--;
+          openFile(active);
+        }
+        function renameFile(i) {
+          var tab = tabsEl.children[i];
+          var nameSpan = tab ? tab.querySelector(".ide-tab-name") : null;
+          if (!nameSpan) return;
+          var input = document.createElement("input");
+          input.className = "ide-rename"; input.value = files[i].name;
+          var done = false;
+          function commit(save) {
+            if (done) return; done = true;
+            if (save) {
+              var nm = (input.value || "").trim();
+              if (nm) {
+                files[i].name = nm; files[i].lang = langOfName(nm);
+                if (files[i].path) files[i].path = nm;
+                try { monaco.editor.setModelLanguage(files[i].model, monoOf(files[i].lang)); } catch (e) {}
+                if (i === active) langSel.value = files[i].lang;
+              }
+            }
+            renderTabs(); renderExplorer(); persist(); editor.focus();
+          }
+          input.onkeydown = function (e) {
+            if (e.key === "Enter") { e.preventDefault(); commit(true); }
+            else if (e.key === "Escape") { e.preventDefault(); commit(false); }
+          };
+          input.onblur = function () { commit(true); };
+          input.onclick = function (e) { e.stopPropagation(); };
+          nameSpan.replaceWith(input); input.focus(); input.select();
+        }
+
+        editor.onDidChangeCursorPosition(function (e) {
+          statusPos.textContent = "Ln " + e.position.lineNumber + ", Col " + e.position.column;
+        });
+        langSel.onchange = function () {
+          files[active].lang = langSel.value;
+          try { monaco.editor.setModelLanguage(files[active].model, monoOf(langSel.value)); } catch (e) {}
+          renderTabs(); renderExplorer(); persist();
+        };
+        document.getElementById("ideNewFile").onclick = addFile;
+
+        // 환영 화면
+        function hideWelcome() { if (welcome) welcome.style.display = "none"; }
+        document.getElementById("wStart").onclick = hideWelcome;
+        document.getElementById("wOpenFile").onclick = function () { openLocalFiles(); };
+        document.getElementById("wOpenFolder").onclick = function () { openLocalFolder(); };
+
+        // 통합 패널
+        function showPanel(which) {
+          panel.style.display = "flex";
+          ["output", "preview"].forEach(function (p) {
+            var btn = panel.querySelector('[data-panel="' + p + '"]');
+            var pane = document.getElementById(p === "output" ? "ceOut" : "ceFrame");
+            if (btn) btn.classList.toggle("on", p === which);
+            if (pane) pane.classList.toggle("on", p === which);
+          });
+        }
+        Array.prototype.forEach.call(panel.querySelectorAll(".ide-panel-tabs [data-panel]"), function (b) {
+          b.onclick = function () { showPanel(b.getAttribute("data-panel")); };
+        });
+        document.getElementById("idePanelClose").onclick = function () { panel.style.display = "none"; };
+
+        // ── Python (Pyodide: 브라우저 내 CPython + pip/micropip) ──
+        var PYODIDE_VER = "0.26.4";
+        var pyReady = null;
+        function loadPyodideOnce() {
+          if (pyReady) return pyReady;
+          out.textContent = "🐍 Python 런타임(Pyodide) 로딩 중… 최초 1회만, 수십 초 걸릴 수 있어요."; showPanel("output");
+          pyReady = new Promise(function (resolve, reject) {
+            var s = document.createElement("script");
+            s.src = "https://cdn.jsdelivr.net/pyodide/v" + PYODIDE_VER + "/full/pyodide.js";
+            s.onload = function () {
+              loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v" + PYODIDE_VER + "/full/" })
+                .then(function (py) { window.__qpy = py; ensureJedi(py); resolve(py); })
+                .catch(reject);
+            };
+            s.onerror = function () { reject(new Error("Pyodide 로드 실패(네트워크 확인)")); };
+            document.head.appendChild(s);
+          });
+          return pyReady;
+        }
+        // 자동완성용 jedi 를 백그라운드로 설치(실행엔 영향 없음). 완료되면 jediOk=true → 실제 Python 자동완성.
+        function ensureJedi(py) {
+          if (jediReady) return jediReady;
+          jediReady = py.loadPackage("micropip")
+            .then(function () { return py.pyimport("micropip").install("jedi"); })
+            .then(function () {
+              py.runPython(
+                "import jedi, json\n" +
+                "def _qc(src, line, col):\n" +
+                "    try:\n" +
+                "        cs = jedi.Script(src).complete(line, col)\n" +
+                "        return json.dumps([{'n': c.name, 't': c.type, 'p': c.complete} for c in cs[:60]])\n" +
+                "    except Exception:\n" +
+                "        return '[]'\n",
+              );
+              jediOk = true;
+            })
+            .catch(function () { jediOk = false; });
+          return jediReady;
+        }
+        function pipInstall(py, pkgs) {
+          if (!pkgs.length) return Promise.resolve({ ok: [], fail: [] });
+          return py.loadPackage("micropip").then(function () {
+            var mp = py.pyimport("micropip");
+            var okArr = [], failArr = [];
+            return pkgs.reduce(function (pr, pkg) {
+              return pr.then(function () {
+                return mp.install(pkg).then(function () { okArr.push(pkg); })
+                  .catch(function (e) {
+                    var m = e && e.message ? String(e.message).split("\n")[0] : "실패";
+                    failArr.push(pkg + " (" + m + ")");
+                  });
+              });
+            }, Promise.resolve()).then(function () { return { ok: okArr, fail: failArr }; });
+          });
+        }
+        function runPython(code) {
+          showPanel("output");
+          loadPyodideOnce().then(function (py) {
+            out.textContent = "실행 중…";
+            var buf = [];
+            function flush() { out.textContent = buf.join("") || "(출력 없음)"; }
+            try {
+              py.setStdout({ batched: function (s) { buf.push(s + "\n"); flush(); } });
+              py.setStderr({ batched: function (s) { buf.push(s + "\n"); flush(); } });
+            } catch (e) {}
+            var pipPkgs = [];
+            code.split("\n").slice(0, 40).forEach(function (line) {
+              var m = line.match(/^#\s*(?:pip\s+install|pip\s*[:=]|requirements?\s*[:=])\s*(.+)$/i);
+              if (m) m[1].split(/[\s,]+/).filter(Boolean).forEach(function (p) { pipPkgs.push(p); });
+            });
+            py.loadPackagesFromImports(code).catch(function () {})
+              .then(function () {
+                if (pipPkgs.length) {
+                  buf.push("📦 설치 중: " + pipPkgs.join(", ") + "\n"); flush();
+                  return pipInstall(py, pipPkgs).then(function (r) {
+                    if (r.fail.length) { buf.push("⚠ 설치 실패: " + r.fail.join(", ") + "\n"); flush(); }
+                  });
+                }
+              })
+              .then(function () { return py.runPythonAsync(code); })
+              .then(function (result) {
+                if (result !== undefined && result !== null) { var r = result; try { r = result.toString(); } catch (e) {} buf.push("→ " + r); }
+                flush();
+              })
+              .catch(function (e) {
+                var msg = e && e.message ? String(e.message) : String(e);
+                buf.push("⚠ " + msg);
+                if (/ModuleNotFoundError|No module named/.test(msg))
+                  buf.push("\n💡 모듈이 없으면 '📦 pip' 버튼 또는 코드 첫 줄 '# pip install 모듈명' 으로 설치하세요.");
+                flush();
+              });
+          }).catch(function (e) { out.textContent = "⚠ " + (e && e.message ? e.message : e); });
+        }
+        function pipPrompt() {
+          var inp = window.prompt("설치할 Python 패키지 이름 (공백/콤마로 여러 개)\n예: numpy pandas requests", "");
+          if (!inp) return;
+          var pkgs = inp.split(/[\s,]+/).filter(Boolean); if (!pkgs.length) return;
+          showPanel("output"); out.textContent = "🐍 Python 런타임 준비 중…";
+          loadPyodideOnce().then(function (py) {
+            out.textContent = "📦 설치 중: " + pkgs.join(", ") + " …";
+            return pipInstall(py, pkgs).then(function (r) {
+              var s = "";
+              if (r.ok.length) s += "✓ 설치 완료: " + r.ok.join(", ") + "\n";
+              if (r.fail.length) s += "⚠ 실패: " + r.fail.join(", ") + "\n";
+              out.textContent = (s || "완료\n") + "import 해서 쓸 수 있어요.";
+              flash(r.fail.length ? "일부 실패" : "설치 완료");
+            });
+          }).catch(function (e) { out.textContent = "⚠ 설치 실패: " + (e && e.message ? e.message : e); });
+        }
+
+        function runCurrent() {
+          hideWelcome();
+          var code = curValue(), l = currentLang();
+          if (l === "javascript") {
+            var logs = [], orig = console.log;
+            console.log = function () {
+              logs.push(Array.prototype.map.call(arguments, function (a) {
+                try { return typeof a === "object" ? JSON.stringify(a) : String(a); } catch (e) { return String(a); }
+              }).join(" "));
+              try { orig.apply(console, arguments); } catch (e) {}
+            };
+            var result;
+            try { result = (0, eval)(code); } catch (e) { logs.push("⚠ " + (e && e.message ? e.message : e)); }
+            console.log = orig;
+            if (result !== undefined) { try { logs.push("→ " + (typeof result === "object" ? JSON.stringify(result) : String(result))); } catch (e) {} }
+            out.textContent = logs.join("\n") || "(출력 없음)"; showPanel("output");
+          } else if (l === "htmlmixed") {
+            frame.srcdoc = code; showPanel("preview");
+          } else if (l === "python") {
+            runPython(code);
+          } else {
+            out.textContent = "이 언어(" + (LANGS[l] ? LANGS[l].label : l) + ")는 브라우저 실행을 지원하지 않아요(편집·자동완성만). JavaScript·HTML·Python을 써보세요."; showPanel("output");
+          }
+        }
+        document.getElementById("stRun").onclick = runCurrent;
+        document.getElementById("stPip").onclick = pipPrompt;
+
+        // 미니맵 / 테마
+        function applyMinimap(on) {
+          editor.updateOptions({ minimap: { enabled: on } });
+          try { localStorage.setItem("ceMinimap", on ? "1" : "0"); } catch (e) {}
+        }
+        function applyTheme(light) {
+          ide.classList.toggle("light", light);
+          monaco.editor.setTheme(light ? "vs" : "vs-dark");
+          document.getElementById("stTheme").textContent = light ? "☀" : "🌙";
+          try { localStorage.setItem("ceTheme", light ? "light" : "dark"); } catch (e) {}
+        }
+        document.getElementById("stTheme").onclick = function () { applyTheme(!ide.classList.contains("light")); };
+        document.getElementById("stMinimap").onclick = function () {
+          var on = !(editor.getOption(monaco.editor.EditorOption.minimap).enabled);
+          applyMinimap(on);
+        };
+
+        // 로컬 파일 (File System Access API; 폴백: 업로드/다운로드)
+        var fileInput = document.getElementById("ideFileInput");
+        var hasFSA = !!window.showOpenFilePicker;
+        function addDiskFile(name, text, handle) {
+          var lang = langOfName(name);
+          var f = { name: name, lang: lang, model: monaco.editor.createModel(text, monoOf(lang)), handle: handle || null, dirty: false };
+          files.push(f); attachModel(f); hideWelcome(); openFile(files.length - 1); flash("열기: " + name);
+        }
+        function openLocalFiles() {
+          if (hasFSA) {
+            window.showOpenFilePicker({ multiple: true }).then(function (handles) {
+              handles.forEach(function (h) { h.getFile().then(function (file) { file.text().then(function (text) { addDiskFile(file.name, text, h); }); }); });
+            }).catch(function () {});
+          } else { fileInput.value = ""; fileInput.click(); }
+        }
+        fileInput.onchange = function () {
+          Array.prototype.forEach.call(fileInput.files, function (file) {
+            var r = new FileReader(); r.onload = function () { addDiskFile(file.name, String(r.result || ""), null); }; r.readAsText(file);
+          });
+        };
+        function openLocalFolder() {
+          if (!window.showDirectoryPicker) { flash("이 브라우저는 폴더 열기를 지원하지 않아요. '파일 열기'를 쓰세요."); return; }
+          window.showDirectoryPicker().then(function (dir) {
+            var collected = [], SKIP = { node_modules: 1, ".git": 1, dist: 1, build: 1, ".next": 1, vendor: 1 };
+            function walk(handle, prefix, depth) {
+              if (collected.length >= 300 || depth > 6) return Promise.resolve();
+              var it = handle.values();
+              function next() {
+                return it.next().then(function (res) {
+                  if (res.done || collected.length >= 300) return;
+                  var entry = res.value, p = Promise.resolve();
+                  if (entry.kind === "directory") { if (!SKIP[entry.name] && entry.name.charAt(0) !== ".") p = walk(entry, prefix + entry.name + "/", depth + 1); }
+                  else { collected.push({ name: prefix + entry.name, handle: entry }); }
+                  return p.then(next);
+                });
+              }
+              return next();
+            }
+            flash("폴더 읽는 중…");
+            walk(dir, "", 0).then(function () { folderEntries = collected; folderName = dir.name; hideWelcome(); renderExplorer(); flash("폴더 열림: " + dir.name + " (" + collected.length + "개)"); })
+              .catch(function (e) { flash("폴더 읽기 실패: " + e.message); });
+          }).catch(function () {});
+        }
+        function saveActiveToDisk() {
+          var f = files[active];
+          if (f.handle && f.handle.createWritable) {
+            f.handle.createWritable().then(function (w) { return w.write(f.model.getValue()).then(function () { return w.close(); }); })
+              .then(function () { f.dirty = false; renderTabs(); flash("저장됨 → " + f.name); persist(); })
+              .catch(function (e) { flash("저장 실패: " + e.message); });
+          } else if (window.showSaveFilePicker) {
+            window.showSaveFilePicker({ suggestedName: f.name }).then(function (h) {
+              return h.createWritable().then(function (w) { return w.write(f.model.getValue()).then(function () { return w.close(); }); }).then(function () {
+                f.handle = h; f.name = h.name || f.name; f.lang = langOfName(f.name); f.dirty = false;
+                try { monaco.editor.setModelLanguage(f.model, monoOf(f.lang)); } catch (e) {}
+                langSel.value = f.lang; renderTabs(); renderExplorer(); flash("저장됨 → " + f.name); persist();
+              });
+            }).catch(function () {});
+          } else { downloadActive(); }
+        }
+        function downloadActive() {
+          var f = files[active];
+          var blob = new Blob([f.model.getValue()], { type: "text/plain;charset=utf-8" });
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement("a"); a.href = url; a.download = f.name;
+          document.body.appendChild(a); a.click();
+          setTimeout(function () { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+          flash("다운로드: " + f.name);
+        }
+        document.getElementById("ideOpenFile").onclick = openLocalFiles;
+        document.getElementById("ideOpenFolder").onclick = openLocalFolder;
+        document.getElementById("stSave").onclick = saveActiveToDisk;
+        document.getElementById("stDownload").onclick = downloadActive;
+
+        // 키보드 단축키 (Monaco 명령)
+        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, saveOrLocal);
+        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, runCurrent);
+        function formatDoc() {
+          var a = editor.getAction("editor.action.formatDocument");
+          if (a) a.run().then(function () { editor.focus(); }, function () {});
+          else flash("이 언어는 포맷을 지원하지 않아요");
+        }
+        editor.addCommand(monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyF, formatDoc);
+        document.getElementById("stFormat").onclick = formatDoc;
+
+        // 액티비티 바
+        Array.prototype.forEach.call(document.querySelectorAll(".ide-activity [data-act]"), function (b) {
+          b.onclick = function () {
+            var a = b.getAttribute("data-act");
+            if (a === "explorer") {
+              var side = document.getElementById("ideSide");
+              var show = side.style.display === "none";
+              side.style.display = show ? "block" : "none"; b.classList.toggle("on", show);
+            } else if (a === "run") { runCurrent(); }
+            else if (a === "agent") {
+              var showA = ide.classList.contains("noagent");
+              ide.classList.toggle("noagent", !showA); b.classList.toggle("on", showA);
+              if (showA) document.getElementById("agentPrompt").focus();
+            } else if (a === "home") { location.href = "/"; }
+          };
+        });
+
+        // ── Agent (AI) ──
+        var agentMsgs = document.getElementById("agentMsgs");
+        var agentPrompt = document.getElementById("agentPrompt");
+        var agentModel = document.getElementById("agentModel");
+        var agentSendBtn = document.getElementById("agentSend");
+        var agentBusy = false;
+        fetch("/api/admin/code-assist/models").then(function (r) { return r.json(); }).then(function (d) {
+          var ms = (d && d.models) || [];
+          agentModel.innerHTML = "";
+          ms.forEach(function (m) {
+            var o = document.createElement("option");
+            o.value = m.id; o.textContent = m.label + (m.available ? "" : " (불가)"); if (!m.available) o.disabled = true;
+            agentModel.appendChild(o);
+          });
+          try { var sm = localStorage.getItem("caModel"); if (sm && ms.some(function (m) { return m.id === sm && m.available; })) agentModel.value = sm; } catch (e) {}
+          var cur = ms.filter(function (m) { return m.id === agentModel.value; })[0];
+          if (!cur || !cur.available) { var first = ms.filter(function (m) { return m.available; })[0]; if (first) agentModel.value = first.id; }
+        }).catch(function () {});
+        agentModel.onchange = function () { try { localStorage.setItem("caModel", agentModel.value); } catch (e) {} };
+
+        function agentBubble(role, text) {
+          var d = document.createElement("div");
+          d.className = "ag-bubble " + (role === "user" ? "ag-user" : "ag-ai"); d.textContent = text;
+          agentMsgs.appendChild(d); agentMsgs.scrollTop = agentMsgs.scrollHeight; return d;
+        }
+        function extractCode(t) { var m = t.match(/```[a-zA-Z0-9_+\-/.]*\n([\s\S]*?)```/); return m ? m[1].replace(/\n$/, "") : null; }
+        function insertCode(code) {
+          var sel = editor.getSelection();
+          editor.executeEdits("agent", [{ range: sel, text: code, forceMoveMarkers: true }]);
+          editor.focus();
+        }
+        function agentActions(bubble, code, full) {
+          var row = document.createElement("div"); row.className = "ag-actions";
+          function mk(label, fn) { var b = document.createElement("button"); b.textContent = label; b.onclick = fn; row.appendChild(b); }
+          if (code != null) {
+            mk("커서에 삽입", function () { insertCode(code); });
+            mk("전체 교체", function () { editor.getModel().setValue(code); editor.focus(); });
+          }
+          mk("복사", function (e) { try { navigator.clipboard.writeText(code != null ? code : full); e.target.textContent = "복사됨!"; setTimeout(function () { e.target.textContent = "복사"; }, 1200); } catch (x) {} });
+          bubble.appendChild(row);
+        }
+        function agentSend() {
+          var p = (agentPrompt.value || "").trim(); if (!p || agentBusy) return;
+          var empty = agentMsgs.querySelector(".ide-agent-empty"); if (empty) empty.remove();
+          agentBubble("user", p); agentPrompt.value = "";
+          agentBusy = true; agentSendBtn.disabled = true;
+          var b = agentBubble("ai", "생각하는 중…");
+          fetch("/api/admin/code-assist", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt: p, code: curValue(), lang: currentLang(), model: agentModel.value }),
+          }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+            .then(function (x) {
+              if (!x.ok) { b.textContent = "⚠ " + ((x.j && x.j.error) || "오류"); return; }
+              var ans = (x.j && x.j.answer) || "(빈 응답)";
+              b.textContent = ans; agentActions(b, extractCode(ans), ans); agentMsgs.scrollTop = agentMsgs.scrollHeight;
+            }).catch(function (e) { b.textContent = "⚠ 요청 실패: " + (e && e.message ? e.message : e); })
+            .finally(function () { agentBusy = false; agentSendBtn.disabled = false; });
+        }
+        agentSendBtn.onclick = agentSend;
+        agentPrompt.addEventListener("keydown", function (e) {
+          if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); agentSend(); }
+        });
+        document.getElementById("agentClear").onclick = function () { agentMsgs.innerHTML = '<div class="ide-agent-empty">코드에 대해 무엇이든 물어보세요.</div>'; };
+        document.getElementById("agentClose").onclick = function () {
+          ide.classList.add("noagent");
+          var ab = document.querySelector('.ide-activity [data-act="agent"]'); if (ab) ab.classList.remove("on");
+        };
+
+        renderTabs(); renderExplorer(); langSel.value = currentLang();
+      }
+    </script>
+  </body>
+</html>
