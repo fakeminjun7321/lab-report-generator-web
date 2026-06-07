@@ -497,6 +497,10 @@
         if (!m) return "";
         if (m.indexOf("opus") >= 0) return "Opus";
         if (m.indexOf("sonnet") >= 0) return "Sonnet";
+        if (m === "gpt-5.4-mini") return "GPT mini";
+        if (m === "gpt-5.4") return "GPT-5.4";
+        if (m === "gpt-5.5") return "GPT-5.5";
+        if (m.indexOf("gpt") >= 0) return "GPT";
         return m;
       }
       function reportAccessLabel(blocked) {
@@ -631,7 +635,10 @@
             "이 사용자가 쓸 수 있는 모델을 제한합니다.\n\n" +
               "1 = 전체 허용 (사용자가 선택)\n" +
               "2 = Opus만 (항상 Opus 4.8)\n" +
-              "3 = Sonnet만 (항상 Sonnet 4.6)\n\n" +
+              "3 = Sonnet만 (항상 Sonnet 4.6)\n" +
+              "4 = GPT-5.5만\n" +
+              "5 = GPT-5.4만\n" +
+              "6 = GPT-5.4 mini만\n\n" +
               "번호 입력:",
             "1",
           );
@@ -640,9 +647,12 @@
             1: "",
             2: "claude-opus-4-8",
             3: "claude-sonnet-4-6",
+            4: "gpt-5.5",
+            5: "gpt-5.4",
+            6: "gpt-5.4-mini",
           };
           const key = String(input).trim();
-          if (!(key in map)) return alert("1, 2, 3 중 하나를 입력하세요.");
+          if (!(key in map)) return alert("1 ~ 6 중 하나를 입력하세요.");
           await patchUser(id, { restrictedModel: map[key] });
           loadUsers();
         } else if (act === "reports") {

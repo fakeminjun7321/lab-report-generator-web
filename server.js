@@ -2361,15 +2361,31 @@ app.post(
       "claude-opus-4-7",
       "claude-sonnet-4-6",
     ];
+    // GPT(OpenAI) 보고서 생성은 배선 완료된 종류에만 허용(phys-inquiry 는 추후 배선).
+    const GPT_REPORT_MODELS = ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini"];
+    const GPT_OK_TYPES = new Set(["chem-pre", "chem-result", "phys-result"]);
+    const allowedModels = GPT_OK_TYPES.has(reportType)
+      ? [...ALLOWED_MODELS, ...GPT_REPORT_MODELS]
+      : ALLOWED_MODELS;
     const requestedModel = String(req.body.model || "").trim();
-    let model = ALLOWED_MODELS.includes(requestedModel) ? requestedModel : null;
+    let model = allowedModels.includes(requestedModel) ? requestedModel : null;
     // 모델 제한 계정(예: 베타테스터)은 허용 모델로 강제
     if (userInfo.restrictedModel) {
-      model = ALLOWED_MODELS.includes(userInfo.restrictedModel)
+      model = allowedModels.includes(userInfo.restrictedModel)
         ? userInfo.restrictedModel
         : "claude-sonnet-4-6";
     }
     if (!model) model = "claude-opus-4-8"; // 기본 = Opus 4.8
+    // GPT 선택인데 서버에 키가 없으면 명확히 거부(Claude로 조용히 바꾸지 않음).
+    if (
+      /^gpt/i.test(model) &&
+      !(process.env.GPT_API_KEY || process.env.OPENAI_API_KEY)
+    ) {
+      return res.status(503).json({
+        error:
+          "GPT 모델은 현재 서버에 키가 설정되지 않아 사용할 수 없습니다(GPT_API_KEY).",
+      });
+    }
     // 베타·무료 보고서는 크레딧 미차감(0). 그 외는 모델별 단가.
     const isFreeBeta = FREE_BETA_TYPES.has(reportType);
     const creditCost = isFreeBeta ? 0 : pricing.getModelCredits(model);
@@ -4031,7 +4047,14 @@ app.patch("/api/admin/users/:id", requireAdmin, async (req, res) => {
   }
   // 모델 제한: "" = 전체 허용, 그 외엔 허용 모델 id만
   if (restrictedModel !== undefined) {
-    const allowedRestrict = ["", "claude-opus-4-8", "claude-sonnet-4-6"];
+    const allowedRestrict = [
+      "",
+      "claude-opus-4-8",
+      "claude-sonnet-4-6",
+      "gpt-5.5",
+      "gpt-5.4",
+      "gpt-5.4-mini",
+    ];
     const rm = restrictedModel == null ? "" : String(restrictedModel).trim();
     if (!allowedRestrict.includes(rm)) {
       return res

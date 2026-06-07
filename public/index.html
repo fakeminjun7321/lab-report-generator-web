@@ -302,6 +302,9 @@
           <div class="segmented">
             <label><input type="radio" name="crModel" value="claude-opus-4-8" checked /> Opus 4.8 · 3크레딧</label>
             <label><input type="radio" name="crModel" value="claude-sonnet-4-6" /> Sonnet 4.6 · 1크레딧</label>
+            <label><input type="radio" name="crModel" value="gpt-5.5" /> GPT-5.5 · 3크레딧</label>
+            <label><input type="radio" name="crModel" value="gpt-5.4" /> GPT-5.4 · 2크레딧</label>
+            <label><input type="radio" name="crModel" value="gpt-5.4-mini" /> GPT-5.4 mini · 1크레딧</label>
           </div>
         </div>
         <div class="field-grid cols-3">
@@ -462,6 +465,9 @@
           <div class="segmented">
             <label><input type="radio" name="prModel" value="claude-opus-4-8" checked /> Opus 4.8 · 3크레딧</label>
             <label><input type="radio" name="prModel" value="claude-sonnet-4-6" /> Sonnet 4.6 · 1크레딧</label>
+            <label><input type="radio" name="prModel" value="gpt-5.5" /> GPT-5.5 · 3크레딧</label>
+            <label><input type="radio" name="prModel" value="gpt-5.4" /> GPT-5.4 · 2크레딧</label>
+            <label><input type="radio" name="prModel" value="gpt-5.4-mini" /> GPT-5.4 mini · 1크레딧</label>
           </div>
         </div>
         <div class="field-grid">
@@ -748,6 +754,9 @@
           <div class="segmented">
             <label><input type="radio" name="model" value="claude-opus-4-8" checked /> Opus 4.8 · 3크레딧</label>
             <label><input type="radio" name="model" value="claude-sonnet-4-6" /> Sonnet 4.6 · 1크레딧</label>
+            <label><input type="radio" name="model" value="gpt-5.5" /> GPT-5.5 · 3크레딧</label>
+            <label><input type="radio" name="model" value="gpt-5.4" /> GPT-5.4 · 2크레딧</label>
+            <label><input type="radio" name="model" value="gpt-5.4-mini" /> GPT-5.4 mini · 1크레딧</label>
           </div>
         </div>
         <div class="field-grid cols-3">
@@ -996,6 +1005,9 @@
                 <option value="">매번 직접 선택</option>
                 <option value="claude-opus-4-8">Opus 4.8 (정밀 · 3크레딧)</option>
                 <option value="claude-sonnet-4-6">Sonnet 4.6 (빠름 · 1크레딧)</option>
+                <option value="gpt-5.5">GPT-5.5 (정밀 · 3크레딧)</option>
+                <option value="gpt-5.4">GPT-5.4 (중간 · 2크레딧)</option>
+                <option value="gpt-5.4-mini">GPT-5.4 mini (빠름 · 1크레딧)</option>
               </select>
             </label>
           </p>
@@ -2086,6 +2098,10 @@
         "claude-sonnet-4-6": { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
         "claude-opus-4-8": { input: 15, output: 75, cacheRead: 1.5, cacheWrite: 18.75 },
         "claude-opus-4-7": { input: 15, output: 75, cacheRead: 1.5, cacheWrite: 18.75 },
+        // OpenAI GPT (서버 lib/pricing.js 와 동일). cacheWrite = 캐시 미사용이라 input가.
+        "gpt-5.5": { input: 5, output: 30, cacheRead: 0.5, cacheWrite: 5 },
+        "gpt-5.4": { input: 2.5, output: 15, cacheRead: 0.25, cacheWrite: 2.5 },
+        "gpt-5.4-mini": { input: 0.75, output: 4.5, cacheRead: 0.075, cacheWrite: 0.75 },
       };
 
       // chem-pre 비용 추정 (PDF 1개 + 시스템 프롬프트 ~10K 토큰 + 출력 6~10K)
@@ -2102,8 +2118,10 @@
         const pdfCostHi = (pdfTokensHi / 1e6) * p.input;
         const outputCostLo = (6000 / 1e6) * p.output;
         const outputCostHi = (10000 / 1e6) * p.output;
-        const searchCostLo = 1 * 0.01;
-        const searchCostHi = 3 * 0.01;
+        // 웹검색은 Claude chem-pre 만 수행(GPT 는 미사용 → 검색비용 0).
+        const isGpt = /^gpt/i.test(modelId || "");
+        const searchCostLo = isGpt ? 0 : 1 * 0.01;
+        const searchCostHi = isGpt ? 0 : 3 * 0.01;
 
         const lo = sysCostLo + pdfCostLo + outputCostLo + searchCostLo;
         const hi = sysCostHi + pdfCostHi + outputCostHi + searchCostHi;
@@ -2298,9 +2316,21 @@
         "phys-inquiry": [6000, 11000],
       };
       function estimateGenSeconds(type, modelId, extraInputTokens = 0) {
-        const perK = modelId === "claude-sonnet-4-6" ? 9 : 16; // 초/1k 출력토큰
+        const isGpt = /^gpt/i.test(modelId || "");
+        // 초/1k 출력토큰: Sonnet·GPT mini 빠름, Opus·GPT 플래그십 느림.
+        const perK =
+          modelId === "claude-sonnet-4-6"
+            ? 9
+            : modelId === "gpt-5.4-mini"
+              ? 7
+              : modelId === "gpt-5.4"
+                ? 12
+                : modelId === "gpt-5.5"
+                  ? 14
+                  : 16;
         const base = 25; // 입력 처리 + 문서 빌드 + 차트
-        const webSearch = type === "chem-pre" ? 40 : 0; // 시약 물성 웹검색
+        // 시약 물성 웹검색은 Claude chem-pre 만 수행(GPT chem-pre 는 웹검색 미사용).
+        const webSearch = type === "chem-pre" && !isGpt ? 40 : 0;
         const [oLo, oHi] = OUTPUT_TOKENS[type] || [7000, 11000];
         const inExtra = (extraInputTokens / 1000) * (perK * 0.25); // 사진·데이터 입력분
         return {
