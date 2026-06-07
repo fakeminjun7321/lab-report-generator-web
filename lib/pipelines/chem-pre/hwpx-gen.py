@@ -135,12 +135,15 @@ LINK_COLOR = "#0563C1"
 # Match docx-gen.js FONT constant. Hangul auto-substitutes if Malgun Gothic
 # isn't installed (the user's actual font might be 함초롬바탕 etc.).
 DEFAULT_FONT_FACE = "Malgun Gothic"
+# face values must match the family name of the actually-installed font.
+# Korean fonts register under their Korean family name (나눔명조 / 나눔고딕 /
+# 함초롬바탕) — the English-spaced forms ("Nanum Myeongjo") match nothing in
+# Hancom/Korean Word, so the renderer falls back to the default (맑은 고딕).
 ALLOWED_FONT_FACES = {
     "함초롬바탕",
-    "함초롱바탕",
     "Malgun Gothic",
-    "Nanum Gothic",
-    "Nanum Myeongjo",
+    "나눔고딕",
+    "나눔명조",
 }
 
 
@@ -148,15 +151,20 @@ def normalize_font_face(face):
     face = str(face or "").strip()
     aliases = {
         "함초롱바탕": "함초롬바탕",
+        "함초롬바탕": "함초롬바탕",
         "hamchorom-batang": "함초롬바탕",
         "맑은 고딕": "Malgun Gothic",
         "malgun-gothic": "Malgun Gothic",
-        "나눔고딕": "Nanum Gothic",
-        "나눔 고딕": "Nanum Gothic",
-        "nanum-gothic": "Nanum Gothic",
-        "나눔명조": "Nanum Myeongjo",
-        "나눔 명조": "Nanum Myeongjo",
-        "nanum-myeongjo": "Nanum Myeongjo",
+        "나눔고딕": "나눔고딕",
+        "나눔 고딕": "나눔고딕",
+        "Nanum Gothic": "나눔고딕",
+        "NanumGothic": "나눔고딕",
+        "nanum-gothic": "나눔고딕",
+        "나눔명조": "나눔명조",
+        "나눔 명조": "나눔명조",
+        "Nanum Myeongjo": "나눔명조",
+        "NanumMyeongjo": "나눔명조",
+        "nanum-myeongjo": "나눔명조",
     }
     if face in aliases:
         return aliases[face]
@@ -1612,12 +1620,14 @@ def add_page_number_to_footer(doc):
     sec_elem = getattr(sec, "element", None)
     if sec_elem is None:
         return
+    # ⚠️ HWPX 는 페이지 유형별로 footer 가 여러 개(BOTH/ODD/EVEN/FIRST)일 수 있다.
+    # 첫 footer 에서 return 하면 나머지 footer 에 placeholder "- 사전보고서 -" 가
+    # 그대로 남아 일부 페이지에 노출된다. 그래서 모든 footer 를 처리한다.
     for footer in sec_elem.iter(f"{NS_HP}footer"):
+        replaced = False
         for run in footer.iter(f"{NS_HP}run"):
             t = run.find(f"{NS_HP}t")
-            if t is None or t.text is None:
-                continue
-            if "사전보고서" not in t.text:
+            if t is None or t.text is None or "사전보고서" not in t.text:
                 continue
             t.text = "- "
             etree.SubElement(
@@ -1627,9 +1637,16 @@ def add_page_number_to_footer(doc):
             )
             tail = etree.SubElement(run, f"{NS_HP}t")
             tail.text = " -"
-            if hasattr(sec, "mark_dirty"):
-                sec.mark_dirty()
-            return
+            replaced = True
+            break
+        # 안전망: pageNum 치환을 못 한 footer(텍스트가 run 여러 개로 쪼개진 경우 등)
+        # 라도 "사전보고서" 리터럴은 절대 남기지 않는다.
+        if not replaced:
+            for t in footer.iter(f"{NS_HP}t"):
+                if t.text and "사전보고서" in t.text:
+                    t.text = t.text.replace("사전보고서", "").strip()
+    if hasattr(sec, "mark_dirty"):
+        sec.mark_dirty()
 
 
 # ── Top-level ─────────────────────────────────────────────────────────────
