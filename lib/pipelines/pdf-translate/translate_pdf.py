@@ -508,31 +508,34 @@ def _fix_span_text(font, text):
         return text
     f = font or ""
     dec = _CUR_DEC.get(_norm_font(f))
+    # 폰트 판정(부분문자열 검색)은 호출당 1회만 — 글자 루프 밖으로 끌어낸다(추출 속도).
+    # 기호 전용 서브셋 폰트(WWDOC…)는 디코더보다 우선해 강제 매핑(전하·별표).
+    # 디코더가 'MacRomanEncoding' 항등으로 '1'→'1' 을 돌려주면 깨진 채 남기 때문.
+    forced = _WWDOC01_FIX if "WWDOC01" in f else (_WWDOC06_FIX if "WWDOC06" in f else None)
+    if "CMSY" in f:
+        fallback = _CMSY_FIX
+    elif "CMEX" in f:
+        fallback = _CMEX_FIX
+    elif "CMMI" in f:
+        fallback = _CMMI_FIX
+    elif "MathTechnical" in f:
+        fallback = _MATHTECH_FIX
+    else:
+        fallback = None
+    # 빠른 경로: 강제맵·디코더·폴백맵이 모두 없으면(대다수 본문 폰트) 원문 그대로 반환.
+    if forced is None and dec is None and fallback is None:
+        return text
     out = []
     for ch in text:
-        # 기호 전용 서브셋 폰트(WWDOC…)는 디코더보다 우선해 강제 매핑(전하·별표).
-        # 디코더가 'MacRomanEncoding' 항등으로 '1'→'1' 을 돌려주면 깨진 채 남기 때문.
-        if "WWDOC01" in f and ch in _WWDOC01_FIX:
-            out.append(_WWDOC01_FIX[ch])
-            continue
-        if "WWDOC06" in f and ch in _WWDOC06_FIX:
-            out.append(_WWDOC06_FIX[ch])
+        if forced is not None and ch in forced:
+            out.append(forced[ch])
             continue
         if dec is not None:
             u = dec.get(ord(ch))
             if u is not None:
                 out.append(u)
                 continue
-        if "CMSY" in f:
-            out.append(_CMSY_FIX.get(ch, ch))
-        elif "CMEX" in f:
-            out.append(_CMEX_FIX.get(ch, ch))
-        elif "CMMI" in f:
-            out.append(_CMMI_FIX.get(ch, ch))
-        elif "MathTechnical" in f:
-            out.append(_MATHTECH_FIX.get(ch, ch))
-        else:
-            out.append(ch)
+        out.append(fallback.get(ch, ch) if fallback is not None else ch)
     return "".join(out)
 
 
