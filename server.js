@@ -3726,6 +3726,9 @@ app.use(
 // 랩(기술 공개): 공개 읽기 — 제목 목록 / 상세(본문+코드) / 코드 파일 다운로드(화이트리스트).
 app.use("/api/lab", require("./lib/lab-routes")());
 
+// 관리자 "만들기"(AI 아티팩트 빌더): 웹페이지·위젯 생성 → /p/:slug 게시.
+app.use(require("./lib/artifacts-routes")({ requireAdmin, getSessionUser }));
+
 app.get("/api/cloud/status", requireAuth, async (req, res) => {
   const u = getSessionUser(req);
   const out = {
