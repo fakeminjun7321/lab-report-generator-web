@@ -35,6 +35,11 @@
   var SYMBOLS = {
     times: 'times', div: 'div', pm: 'plusminus', mp: 'minusplus', cdot: 'cdot',
     le: 'leq', leq: 'leq', ge: 'geq', geq: 'geq', ne: 'neq', neq: 'neq',
+    // (chem-pre-lab-web 수정) AMS 변형·논리 함의·집합 조건 막대 — 매핑이
+    // 없으면 미확인 명령 통과로 'geqslant'/'implies'/'mid' 영단어가 그대로
+    // 렌더된다. \pmod/\bmod 는 뒤따르는 {n} 그룹을 그대로 살려 'mod {n}'.
+    geqslant: 'geq', leqslant: 'leq', implies: 'RARROW', iff: 'LRARROW',
+    mid: '|', pmod: 'mod', bmod: 'mod',
     equiv: 'equiv', approx: 'approx', sim: 'sim', simeq: 'simeq', cong: 'cong',
     propto: 'propto', doteq: 'doteq', prec: 'prec', succ: 'succ', ll: '<<', gg: '>>', lll: 'LLL', ggg: '>>>',
     asymp: 'ASYMP',
@@ -179,7 +184,12 @@
   }
 
   // 인자 하나 읽기: { ... } 그룹이면 내부, 아니면 단일 항.
-  function readArg(tokens, pos) {
+  // (chem-pre-lab-web 수정) singleGlyph: LaTeX 규약상 중괄호 없는 인자는
+  // 토큰 '1개'다 — \frac12 는 {1} over {2} 이지 {12} over {다음 항} 이 아니다.
+  // 토크나이저는 숫자 run("12")을 한 항으로 묶는데(첨자 x_12 표기엔 그게
+  // 맞다) frac/binom 인자에서는 첫 글자만 떼고 나머지를 다음 토큰으로
+  // 되돌린다. frac/binom 계열 인자 읽기에서만 켠다.
+  function readArg(tokens, pos, singleGlyph) {
     skipSpaces(tokens, pos);
     var t = peek(tokens, pos);
     if (!t) return '';
@@ -189,6 +199,10 @@
       var c = peek(tokens, pos);
       if (c && c.type === 'ctrl' && c.value === '}') pos.i++;
       return inner;
+    }
+    if (singleGlyph && t.type === 'char' && t.value.length > 1) {
+      tokens[pos.i] = { type: 'char', value: t.value.slice(1) };
+      return t.value.charAt(0);
     }
     var atom = parseAtom(tokens, pos);
     return atom === null ? '' : atom.text;
@@ -210,6 +224,34 @@
     return name;
   }
 
+  // (chem-pre-lab-web 수정) \text{percent difference} 류 '평문' 인자를 한컴
+  // 인용 리터럴("...")로 읽는다. readArg 는 글자 단위로 쪼개므로 한컴이 토큰
+  // 사이 공백을 렌더하지 않아 단어 간격·로만체가 사라진다('percentdifference').
+  // 명령(\cmd)·중첩 그룹·첨자가 섞인 본문은 null 을 반환하고 pos 를 원복해
+  // 기존 경로(readArg)로 폴백한다.
+  function readQuotedTextArg(tokens, pos) {
+    var save = pos.i;
+    skipSpaces(tokens, pos);
+    var t = peek(tokens, pos);
+    if (!t || !(t.type === 'ctrl' && t.value === '{')) { pos.i = save; return null; }
+    pos.i++;
+    var buf = '';
+    while (pos.i < tokens.length) {
+      var tk = tokens[pos.i];
+      if (tk.type === 'ctrl' && tk.value === '}') {
+        pos.i++;
+        var s = buf.replace(/"/g, '').replace(/\s+/g, ' ').trim();
+        if (!s) break; // 빈 본문 — 기존 경로로
+        return '"' + s + '"';
+      }
+      if (tk.type === 'char' || tk.type === 'text') { buf += tk.value; pos.i++; continue; }
+      if (tk.type === 'space') { buf += ' '; pos.i++; continue; }
+      break; // cmd / 중첩 { _ ^ & — 기존 경로로
+    }
+    pos.i = save;
+    return null;
+  }
+
   function readDelim(tokens, pos) {
     skipSpaces(tokens, pos);
     var t = peek(tokens, pos);
@@ -223,7 +265,10 @@
         '{': '{', '}': '}', lbrace: '{', rbrace: '}',
         langle: '<', rangle: '>', lfloor: '[', rfloor: ']',
         lceil: '[', rceil: ']', vert: '|', Vert: 'VERT',
-        lvert: '|', rvert: '|', lVert: 'VERT', rVert: 'VERT'
+        lvert: '|', rvert: '|', lVert: 'VERT', rVert: 'VERT',
+        // (chem-pre-lab-web 수정) \| 는 이중 막대(노름 ‖)다 — 매핑이 없으면
+        // t.value('|') 그대로 새어 \left\| 가 단일 막대(절댓값)로 격하된다.
+        '|': 'VERT'
       };
       return m.hasOwnProperty(t.value) ? m[t.value] : t.value;
     }
@@ -285,9 +330,10 @@
     if (SPACING.hasOwnProperty(name)) return { text: SPACING[name], keyword: false };
 
     // 분수
+    // (chem-pre-lab-web 수정) 중괄호 없는 인자는 토큰 1개(readArg singleGlyph)
     if (name === 'frac' || name === 'dfrac' || name === 'tfrac' || name === 'cfrac' || name === 'fras') {
-      var a = readArg(tokens, pos);
-      var b = readArg(tokens, pos);
+      var a = readArg(tokens, pos, true);
+      var b = readArg(tokens, pos, true);
       return { text: '{' + a + '} over {' + b + '}', keyword: false };
     }
 
@@ -376,9 +422,10 @@
     }
 
     // 이항계수 / 조합
+    // (chem-pre-lab-web 수정) 중괄호 없는 인자는 토큰 1개(readArg singleGlyph)
     if (name === 'binom' || name === 'dbinom' || name === 'tbinom') {
-      var top = readArg(tokens, pos);
-      var bot = readArg(tokens, pos);
+      var top = readArg(tokens, pos, true);
+      var bot = readArg(tokens, pos, true);
       return { text: '{' + top + '} CHOOSE {' + bot + '}', keyword: false };
     }
 
@@ -408,6 +455,19 @@
       return { text: readDelim(tokens, pos), keyword: false };
     }
 
+    // (chem-pre-lab-web 수정) \left/\right 없는 알몸 노름·절댓값 구분자.
+    // readDelim 의 Vert 매핑은 left/right 경로 전용이라 bare \lVert/\Vert 가
+    // 미확인 명령 통과로 'lVert' 영단어 그대로 렌더되고, \|(cmd '|')는 단일
+    // 막대로 격하됐다. 노름 ‖(lVert/rVert/Vert/\|)은 한컴 키워드 VERT,
+    // 절댓값 |(lvert/rvert/vert)은 막대 글자로. VERT 는 leftRightDelim 과
+    // 같은 이유로 앞공백을 둬 인접 토큰과의 키워드 융합(xVERT)을 막는다.
+    if (name === 'lVert' || name === 'rVert' || name === 'Vert' || name === '|') {
+      return { text: ' VERT', keyword: true };
+    }
+    if (name === 'lvert' || name === 'rvert' || name === 'vert') {
+      return { text: '|', keyword: false };
+    }
+
     // 환경 (행렬, cases 등)
     if (name === 'begin') return parseEnvironment(tokens, pos);
     if (name === 'end') { readRawName(tokens, pos); return null; }
@@ -419,7 +479,11 @@
     }
 
     // 로만/볼드/기타 폰트
+    // (chem-pre-lab-web 수정) 평문 인자는 인용 리터럴 "..." 로 — 글자 단위
+    // 분해로 단어 간격·로만체가 사라지는 것 방지. 비평문 인자는 기존 경로.
     if (name === 'mathrm' || name === 'text' || name === 'textrm' || name === 'operatorname') {
+      var quotedText = readQuotedTextArg(tokens, pos);
+      if (quotedText !== null) return { text: quotedText, keyword: false };
       return { text: readArg(tokens, pos), keyword: true };
     }
     if (name === 'mathbf' || name === 'boldsymbol' || name === 'bold' || name === 'textbf') {
@@ -436,6 +500,15 @@
 
     // Ignore structural formatting commands in HWP
     if (name === 'hline' || name === 'vline') return null;
+
+    // (chem-pre-lab-web 수정) 크기/모드 선언과 첨자 위치 힌트 — 그릴 내용이
+    // 없는 명령들. 버리지 않으면 미확인 명령 통과(아래 unknown 경로)로
+    // 'displaystyle'/'limits' 영단어가 수식에 그대로 렌더된다. \middle 은
+    // 구분자 크기 힌트만 버리면 뒤따르는 구분자 토큰(| 등)이 평범한 글자로
+    // 살아남는다. \ensuremath 의 {…} 인자도 일반 그룹으로 이어 파싱된다.
+    if (name === 'displaystyle' || name === 'textstyle' || name === 'scriptstyle' ||
+        name === 'scriptscriptstyle' || name === 'limits' || name === 'nolimits' ||
+        name === 'ensuremath' || name === 'middle') return null;
 
     if (name === 'not') return { text: 'not', keyword: true };
     if (name === 'over') return { text: 'over', keyword: true };

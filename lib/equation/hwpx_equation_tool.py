@@ -20,7 +20,10 @@ from __future__ import annotations
 
 import argparse
 import copy
+import json
+import os
 import re
+import subprocess
 import sys
 import xml.etree.ElementTree as ET
 import zipfile
@@ -120,6 +123,10 @@ def make_equation(
     style: EquationStyle = EquationStyle(),
     treat_as_char: bool = True,
 ) -> ET.Element:
+    if not (script or "").strip():
+        # 빈 hp:script 는 validate_hwpx_equations 가 fatal 로 보므로
+        # 빈 수식 객체는 생성 단계에서 차단한다(호출부가 미리 걸러야 한다).
+        raise ValueError("empty equation script")
     equation = ET.Element(
         qname(HP_NS, "equation"),
         {
@@ -186,7 +193,10 @@ class LatexToHwpConverter:
 
     COMMANDS = {
         r"\times": " TIMES ",
-        r"\cdot": " TIMES ",
+        # \cdot 은 ×(TIMES)가 아니라 가운뎃점(cdot) — 수화물 CuSO4·5H2O,
+        # 단위 곱 J/(mol·K), 내적 표기 관례. hwip 출력(cdot)과도 일치시켜
+        # 같은 문서에서 ·/× 가 혼재하지 않게 한다.
+        r"\cdot": " cdot ",
         r"\div": " DIV ",
         r"\pm": "+-",
         r"\mp": "-+",
@@ -280,10 +290,80 @@ class LatexToHwpConverter:
         r"\iiint": "iiint",
         r"\left": "",
         r"\right": "",
+        r"\middle": "",
+        # ── 물리/화학/수학 빈출 추가분 — hwip 출력 키워드와 맞춘다 ──
+        r"\circ": "circ",
+        r"\degree": "DEG",
+        r"\hbar": "hbar",
+        r"\ell": "ELL",
+        r"\perp": "bot",
+        r"\parallel": "parallel",
+        r"\propto": "propto",
+        r"\Upsilon": "Upsilon",
+        r"\AA": "ANGSTROM",
+        r"\Leftrightarrow": "<->",
+        r"\Longleftrightarrow": "<->",
+        r"\longleftrightarrow": "<->",
+        r"\longrightarrow": "->",
+        r"\longleftarrow": "<-",
+        r"\Longrightarrow": "=>",
+        r"\Longleftarrow": "<=",
+        r"\implies": "=>",
+        r"\iff": "<->",
+        r"\ldots": "ldots",
+        r"\cdots": "cdots",
+        r"\vdots": "vdots",
+        r"\ddots": "ddots",
+        r"\dotsb": "cdots",
+        r"\dotsc": "cdots",
+        r"\dots": "ldots",
+        r"\sup": "sup",
+        r"\inf": "inf",
+        r"\det": "det",
+        r"\gcd": "gcd",
+        r"\arg": "arg",
+        r"\deg": "deg",
+        # ── 접두 충돌 빈출 명령 — 통짜 토큰 매칭(_commands_pattern)과 한 쌍.
+        # 사전에 없어도 \cmd 안전망이 단어로 살리지만, 아래는 대응 키워드가
+        # 있어 명시 매핑한다(hwip vendor 표의 neg/top/bot, FUNCTIONS 의 mod 와 동일).
+        r"\limits": "",  # 연산자 첨자 '위치' 힌트 — 그릴 내용 없음
+        r"\nolimits": "",
+        # 크기/모드 선언 — 그릴 내용이 없다(hwip vendor 의 무시 목록과 한 쌍).
+        r"\displaystyle": "",
+        r"\textstyle": "",
+        r"\scriptstyle": "",
+        r"\scriptscriptstyle": "",
+        r"\ensuremath": "",
+        # AMS slanted 부등호 — 한컴엔 전용 글리프가 없어 일반 부등호로.
+        r"\geqslant": ">=",
+        r"\leqslant": "<=",
+        r"\pmod": " mod ",  # a \equiv b \pmod{n} → a == b mod {n}
+        r"\bmod": " mod ",
+        r"\mod": " mod ",
+        r"\top": "top",  # ⊤ — \to 와 접두 충돌('A^ -> p' 방지)
+        r"\bot": "bot",
+        r"\neg": "lnot",  # ¬ — \ne 와 접두 충돌
+        r"\lnot": "lnot",
+        r"\intercal": "T",  # 전치 A^\intercal ≈ A^T — \int 와 접두 충돌
+        r"\mid": "|",
+        # 노름/절댓값 구분자 — bare \lVert/\Vert 가 \cmd 안전망(convert 말미)
+        # 으로 빠지면 'lVert' 영단어가 그대로 렌더되고, \| 는 백슬래시만 떼여
+        # 단일 막대(절댓값)로 격하된다. 노름 ‖ 은 한컴 키워드 VERT, 절댓값은
+        # 막대 글자(hwip readDelim 매핑과 동일). 양쪽 공백 패딩은
+        # _command_replacement 가 보장해 키워드 융합(xVERT)이 없다.
+        r"\lVert": "VERT",
+        r"\rVert": "VERT",
+        r"\Vert": "VERT",
+        r"\|": "VERT",
+        r"\lvert": "|",
+        r"\rvert": "|",
+        r"\vert": "|",
         r"\,": "`",
         r"\;": "~",
         r"\quad": "~",
         r"\qquad": "~ ~",
+        r"\ ": "~",  # 단위 간격(\<space>) — 측정값 식마다 등장
+        r"\!": "",
     }
 
     ONE_ARG_COMMANDS = {
@@ -296,35 +376,131 @@ class LatexToHwpConverter:
         r"\widetilde": "tilde",
         r"\dot": "dot",
         r"\ddot": "ddot",
+        r"\overrightarrow": "dyad",
+        r"\overbrace": "OVERBRACE",
+        r"\underbrace": "UNDERBRACE",
         r"\mathrm": "",
         r"\mathbf": "",
         r"\mathit": "",
+        r"\mathbb": "",
+        r"\mathcal": "",
+        r"\mathscr": "",
+        r"\mathfrak": "",
+        r"\mathsf": "",
+        r"\mathtt": "",
+        r"\mathnormal": "",
+        r"\boldsymbol": "",
+        r"\operatorname": "",
         r"\text": "",
+        r"\textrm": "",
+        r"\textnormal": "",
+        r"\mbox": "",
+        r"\textbf": "",
+        r"\textit": "",
     }
+
+    # \text 계열은 평문 본문일 때 한컴 인용 리터럴("...")로 감싼다 — 알몸으로
+    # 벗기면 한컴이 토큰 사이 공백을 렌더하지 않아 'percent difference' 가
+    # 'percentdifference' 로 붙고 over/in 등 키워드로 오인될 수 있다.
+    TEXT_LITERAL_COMMANDS = frozenset(
+        {r"\text", r"\textrm", r"\textnormal", r"\mbox"}
+    )
 
     ENVIRONMENTS = {
         "matrix": "matrix",
         "pmatrix": "pmatrix",
         "bmatrix": "bmatrix",
-        "vmatrix": "vmatrix",
-        "Vmatrix": "Vmatrix",
+        # 행렬식 |A| — 한컴 키워드는 dmatrix. vmatrix/Vmatrix 는 한컴에 없어
+        # 이탤릭 단어 'vmatrix'+중괄호로 노출된다(hwip vendor 매핑과 동일).
+        "vmatrix": "dmatrix",
+        "Vmatrix": "dmatrix",
+        "Bmatrix": "matrix",
+        "smallmatrix": "matrix",
         "cases": "cases",
         "aligned": "matrix",
         "array": "matrix",
+        # align/gather 계열 — 행은 # 로, 정렬 & 는 열 구분으로 살린다.
+        "align": "matrix",
+        "align*": "matrix",
+        "alignat": "matrix",
+        "alignedat": "matrix",
+        "gather": "matrix",
+        "gather*": "matrix",
+        "gathered": "matrix",
+        "split": "matrix",
+        # equation 계열 — 감싸지 않고 내용만 남긴다.
+        "equation": "",
+        "equation*": "",
     }
+
+    _COMMANDS_PATTERN: re.Pattern[str] | None = None
+
+    @classmethod
+    def _commands_pattern(cls) -> re.Pattern[str]:
+        r"""COMMANDS 전체의 통짜 토큰 매칭용 단일 정규식(긴 명령 우선).
+
+        str.replace() 평치환은 단어 경계가 없어 사전 밖 명령(\pmod, \limits,
+        \top, \neg, \intercal …)이 사전 안 명령(\pm, \lim, \to, \ne, \int)을
+        접두로 갖는 순간 엉뚱한 기호로 쪼개지고(\pmod → '+- od'), 백슬래시까지
+        소비해 convert 말미의 \cmd 안전망마저 무력화됐다. 영문자 명령 뒤에
+        (?![A-Za-z]) 를 강제해 통짜 토큰만 치환한다(TeX 토크나이즈와 동일 —
+        숫자·기호는 명령 이름의 일부가 될 수 없어 바로 뒤에 와도 된다).
+        """
+        if cls._COMMANDS_PATTERN is None:
+            alternatives = []
+            for src in sorted(cls.COMMANDS, key=len, reverse=True):
+                escaped = re.escape(src)
+                if src[-1].isalpha():
+                    escaped += r"(?![A-Za-z])"
+                alternatives.append(escaped)
+            cls._COMMANDS_PATTERN = re.compile("|".join(alternatives))
+        return cls._COMMANDS_PATTERN
+
+    @classmethod
+    def _command_replacement(cls, match: re.Match[str]) -> str:
+        # 양쪽 공백 패딩: `T\Delta S` 처럼 명령이 변수에 붙어 있으면 치환 시
+        # `TDELTA` 로 키워드가 파손된다(깁스 식). 잉여 공백은 convert 말미에서 정리.
+        dst = cls.COMMANDS[match.group(0)]
+        return f" {dst.strip()} " if dst.strip() else dst
 
     def convert(self, latex: str) -> str:
         text = latex.strip()
         text = self._strip_math_delimiters(text)
+        # 잘린 인자(\frac{a}{b) 복구 — 미폐합 중괄호를 먼저 보충해야 구조
+        # 변환이 인자를 읽을 수 있다. 건너뛰면 아래 안전망이 백슬래시만 떼어
+        # 'frac' 알몸 키워드가 실제 스크립트에 누출된다(hwip 의 관용 복구와
+        # 동일한 동작).
+        text = _balance_brace_groups(text)
         text = self._convert_structures(text)
-        for src, dst in sorted(self.COMMANDS.items(), key=lambda item: -len(item[0])):
-            text = text.replace(src, dst)
+        # 환경 변환 뒤 엉뚱한 위치에 남은 행 구분자 \\ 는 한컴 줄바꿈(#)으로.
+        text = text.replace("\\\\", " # ")
+        # \left. / \right. (evaluated-at 의 빈 구분자)는 명령과 함께 소비한다.
+        # \left→"" 평치환 뒤에는 빈 구분자 '.' 와 소수점·마침표를 구별할 수
+        # 없어 점이 가시 문자로 남으므로 반드시 평치환 전에 처리한다.
+        text = re.sub(r"\\(?:left|right|middle)\s*\.", " ", text)
+        # COMMANDS 일괄 치환 — 통짜 토큰만(접두 파손 방지), 양쪽 공백 패딩.
+        # 상세는 _commands_pattern/_command_replacement docstring 참조.
+        text = self._commands_pattern().sub(self._command_replacement, text)
         text = text.replace(r"\{", "{").replace(r"\}", "}")
         text = text.replace(r"\%", "%")
         text = text.replace(r"\_", "_")
+        text = text.replace(r"\&", "&")
+        # 미지원 명령 안전망 — 백슬래시(원시 LaTeX 잔재)는 어떤 경우에도 최종
+        # 수식 스크립트에 남기지 않는다. 미지원 \begin/\end 는 마커만 버리고
+        # 내용을 살리고, 그 밖의 \cmd 는 이름만 남긴다(공백 패딩으로 키워드
+        # 파손 방지). 남은 외톨이 백슬래시도 제거한다.
+        text = re.sub(r"\\(?:begin|end)\s*\{\s*[A-Za-z*]*\s*\}", " ", text)
+        text = re.sub(r"\\([A-Za-z]+)", r" \1 ", text)
+        text = text.replace("\\", " ")
+        # \{ → { 치환 등으로 뒤늦게 어긋난 중괄호 짝을 한 번 더 복구한다 —
+        # 변환기 출력은 항상 균형 잡힌 스크립트여야 한다.
+        text = _balance_brace_groups(text)
         text = re.sub(r"\b(sum|prod|int|iint|iiint|lim)(?=[_^])", r"\1 ", text)
         text = re.sub(r"\s+", " ", text)
         text = re.sub(r"\s+([_^])", r"\1", text)
+        # `^ circ` 처럼 명령 치환 패딩으로 첨자 뒤에 공백이 끼면 첨자가 다음
+        # 토큰에 못 붙는다 — 첨자는 항상 다음 토큰에 바로 붙인다.
+        text = re.sub(r"([_^])\s+(?=[A-Za-z0-9{(])", r"\1", text)
         return text.strip()
 
     def _strip_math_delimiters(self, text: str) -> str:
@@ -346,6 +522,8 @@ class LatexToHwpConverter:
             previous = current
             current = self._replace_labeled_arrows(current)
             current = self._replace_environments(current)
+            current = self._replace_substack(current)
+            current = self._replace_oversets(current)
             current = self._replace_frac(current)
             current = self._replace_sqrt(current)
             current = self._replace_binom(current)
@@ -362,14 +540,18 @@ class LatexToHwpConverter:
             idx = text.find(marker)
             while idx >= 0:
                 pos = self._skip_spaces(text, idx + len(marker))
-                below = ""
-                if pos < len(text) and text[pos] == "[":
-                    below, pos = self._read_balanced(text, pos, "[", "]")
-                    pos = self._skip_spaces(text, pos)
-                if pos >= len(text) or text[pos] != "{":
+                try:
+                    below = ""
+                    if pos < len(text) and text[pos] == "[":
+                        below, pos = self._read_balanced(text, pos, "[", "]")
+                        pos = self._skip_spaces(text, pos)
+                    if pos >= len(text) or text[pos] != "{":
+                        idx = text.find(marker, idx + len(marker))
+                        continue
+                    above, end = self._read_balanced(text, pos, "{", "}")
+                except ValueError:
                     idx = text.find(marker, idx + len(marker))
                     continue
-                above, end = self._read_balanced(text, pos, "{", "}")
                 label = above.strip() or below.strip()
                 converted_label = self._convert_structures(label)
                 replacement = f"BUILDREL {arrow} {{{converted_label}}}"
@@ -378,12 +560,71 @@ class LatexToHwpConverter:
         return text
 
     def _replace_frac(self, text: str) -> str:
-        for marker in (r"\dfrac", r"\tfrac", r"\frac"):
+        # \cfrac(연분수)도 일반 분수와 동일한 over 구조 — hwip 과 같은 처리.
+        for marker in (r"\dfrac", r"\tfrac", r"\cfrac", r"\frac"):
             text = self._replace_two_braced_args(text, marker, "{%s} over {%s}")
         return text
 
     def _replace_binom(self, text: str) -> str:
-        return self._replace_two_braced_args(text, r"\binom", "{%s} binom {%s}")
+        # 한컴 이항계수 키워드는 CHOOSE (hwip 출력과 동일).
+        for marker in (r"\dbinom", r"\tbinom", r"\binom"):
+            text = self._replace_two_braced_args(text, marker, "{%s} CHOOSE {%s}")
+        return text
+
+    def _replace_oversets(self, text: str) -> str:
+        # \overset{위}{본체} → {본체} ^{위} / \underset{아래}{본체} → {본체} _{아래}
+        for marker, script_mark in (
+            (r"\overset", "^"),
+            (r"\stackrel", "^"),
+            (r"\underset", "_"),
+        ):
+            idx = text.find(marker)
+            while idx >= 0:
+                after = idx + len(marker)
+                if after < len(text) and text[after].isalpha():
+                    idx = text.find(marker, after)
+                    continue
+                pos = self._skip_spaces(text, after)
+                if pos >= len(text) or text[pos] != "{":
+                    idx = text.find(marker, after)
+                    continue
+                try:
+                    first, pos = self._read_balanced(text, pos, "{", "}")
+                    pos = self._skip_spaces(text, pos)
+                    if pos >= len(text) or text[pos] != "{":
+                        idx = text.find(marker, after)
+                        continue
+                    second, end = self._read_balanced(text, pos, "{", "}")
+                except ValueError:
+                    idx = text.find(marker, after)
+                    continue
+                replacement = "{%s} %s{%s}" % (
+                    self._convert_structures(second),
+                    script_mark,
+                    self._convert_structures(first),
+                )
+                text = text[:idx] + replacement + text[end:]
+                idx = text.find(marker, idx + len(replacement))
+        return text
+
+    def _replace_substack(self, text: str) -> str:
+        marker = r"\substack"
+        idx = text.find(marker)
+        while idx >= 0:
+            after = idx + len(marker)
+            pos = self._skip_spaces(text, after)
+            if pos >= len(text) or text[pos] != "{":
+                idx = text.find(marker, after)
+                continue
+            try:
+                body, end = self._read_balanced(text, pos, "{", "}")
+            except ValueError:
+                idx = text.find(marker, after)
+                continue
+            replacement = f"matrix {{ {self._convert_matrix_body(body)} }}"
+            text = text[:idx] + replacement + text[end:]
+            idx = text.find(marker, idx + len(replacement))
+        return text
 
     def _replace_one_arg_commands(self, text: str) -> str:
         for marker, command in sorted(
@@ -391,18 +632,58 @@ class LatexToHwpConverter:
         ):
             idx = text.find(marker)
             while idx >= 0:
-                pos = self._skip_spaces(text, idx + len(marker))
-                if pos >= len(text) or text[pos] != "{":
-                    idx = text.find(marker, idx + len(marker))
+                after = idx + len(marker)
+                if after < len(text) and text[after].isalpha():
+                    # 더 긴 명령의 접두 매칭(\dot in \dots 등) — 건너뛴다.
+                    idx = text.find(marker, after)
                     continue
-                body, end = self._read_balanced(text, pos, "{", "}")
+                pos = self._skip_spaces(text, after)
+                if pos >= len(text) or text[pos] != "{":
+                    # 중괄호 없는 단일 토큰 인자: `\vec v`, `\hat\imath` 등
+                    token = re.match(r"\\[A-Za-z]+|[A-Za-z0-9]", text[pos:])
+                    if token is None:
+                        idx = text.find(marker, after)
+                        continue
+                    body, end = token.group(0), pos + token.end()
+                else:
+                    try:
+                        body, end = self._read_balanced(text, pos, "{", "}")
+                    except ValueError:
+                        idx = text.find(marker, after)
+                        continue
+                literal = self._text_literal_replacement(marker, body)
+                if literal is not None:
+                    text = text[:idx] + literal + text[end:]
+                    idx = text.find(marker, idx + len(literal))
+                    continue
                 converted_body = self._convert_structures(body)
+                # 선행 공백 패딩 — COMMANDS 치환의 양쪽 패딩과 같은 가드.
+                # 없으면 `m\vec{a}` → 'mvec {a}', `A_x\hat{i}` → '_{"xhat"}' 처럼
+                # 키워드가 앞 글자·첨자와 융합한다. 본문만 인라인하는 내용 명령
+                # (\mathrm/\text 계열, command=="")은 패딩하지 않는다. 잉여
+                # 공백은 convert 말미의 공백 정리가 거둬 간다.
                 replacement = (
-                    f"{command} {{{converted_body}}}" if command else converted_body
+                    f" {command} {{{converted_body}}}" if command else converted_body
                 )
                 text = text[:idx] + replacement + text[end:]
                 idx = text.find(marker, idx + len(replacement))
         return text
+
+    def _text_literal_replacement(self, marker: str, body: str) -> str | None:
+        r"""\text 계열 평문 본문의 한컴 인용 리터럴('"..."') 치환값.
+
+        명령(\cmd)·중첩 그룹·첨자·따옴표가 섞인 본문은 None 을 돌려
+        기존 변환 경로로 폴백한다. \mathrm 은 다글자 영문(단위 kg, mol 등)일
+        때만 인용한다 — m/s^2 처럼 구조가 섞인 단위는 기존 경로가 맞다.
+        """
+        plain = body.strip()
+        if not plain or re.search(r'[\\{}"^_]', plain):
+            return None
+        if marker in self.TEXT_LITERAL_COMMANDS:
+            return f'"{plain}"'
+        if marker == r"\mathrm" and re.fullmatch(r"[A-Za-z]{2,}", plain):
+            return f'"{plain}"'
+        return None
 
     def _replace_environments(self, text: str) -> str:
         for latex_name, hwp_name in self.ENVIRONMENTS.items():
@@ -411,7 +692,7 @@ class LatexToHwpConverter:
             idx = text.find(begin)
             while idx >= 0:
                 body_start = idx + len(begin)
-                if latex_name == "array":
+                if latex_name in ("array", "alignat", "alignedat"):
                     after_begin = self._skip_spaces(text, body_start)
                     if after_begin < len(text) and text[after_begin] == "{":
                         try:
@@ -426,18 +707,55 @@ class LatexToHwpConverter:
                     continue
                 body = text[body_start:end_idx]
                 converted_body = self._convert_matrix_body(body)
-                replacement = f"{hwp_name} {{ {converted_body} }}"
+                if hwp_name:
+                    replacement = f"{hwp_name} {{ {converted_body} }}"
+                else:
+                    replacement = converted_body
                 text = text[:idx] + replacement + text[end_idx + len(end) :]
                 idx = text.find(begin, idx + len(replacement))
         return text
 
     def _convert_matrix_body(self, body: str) -> str:
-        rows = re.split(r"\\\\", body.strip())
+        # 행(\\)·열(&) 구분은 중괄호 깊이 0 에서만 인정한다 — \frac{a \\ b}{c}
+        # 처럼 인자 안의 \\ 를 행으로 갈라 중괄호 짝을 깨뜨리지 않도록.
+        rows = self._split_top_level(body.strip(), "\\\\")
         converted_rows: list[str] = []
         for row in rows:
-            cells = [self._convert_structures(cell.strip()) for cell in row.split("&")]
+            cells = [
+                self._convert_structures(cell.strip())
+                for cell in self._split_top_level(row, "&")
+            ]
             converted_rows.append(" & ".join(cells))
         return " # ".join(converted_rows)
+
+    @staticmethod
+    def _split_top_level(text: str, separator: str) -> list[str]:
+        """중괄호 깊이 0 에서만 separator 를 인정하는 분리기(이스케이프 보존)."""
+        parts: list[str] = []
+        buf: list[str] = []
+        depth = 0
+        i = 0
+        n = len(text)
+        sep_len = len(separator)
+        while i < n:
+            char = text[i]
+            if depth == 0 and text.startswith(separator, i):
+                parts.append("".join(buf))
+                buf = []
+                i += sep_len
+                continue
+            if char == "\\":
+                buf.append(text[i : i + 2])
+                i += 2
+                continue
+            if char == "{":
+                depth += 1
+            elif char == "}":
+                depth = max(0, depth - 1)
+            buf.append(char)
+            i += 1
+        parts.append("".join(buf))
+        return parts
 
     def _replace_sqrt(self, text: str) -> str:
         marker = r"\sqrt"
@@ -445,36 +763,79 @@ class LatexToHwpConverter:
         while idx >= 0:
             pos = idx + len(marker)
             pos = self._skip_spaces(text, pos)
-            degree = None
-            if pos < len(text) and text[pos] == "[":
-                degree, pos = self._read_balanced(text, pos, "[", "]")
-                pos = self._skip_spaces(text, pos)
-            if pos >= len(text) or text[pos] != "{":
+            try:
+                degree = None
+                if pos < len(text) and text[pos] == "[":
+                    degree, pos = self._read_balanced(text, pos, "[", "]")
+                    pos = self._skip_spaces(text, pos)
+                if pos >= len(text) or text[pos] != "{":
+                    idx = text.find(marker, idx + len(marker))
+                    continue
+                body, end = self._read_balanced(text, pos, "{", "}")
+            except ValueError:
+                # 미폐합 [ / { — 이 출현은 건너뛰고 안전망(convert 말미)이 처리
                 idx = text.find(marker, idx + len(marker))
                 continue
-            body, end = self._read_balanced(text, pos, "{", "}")
             converted_body = self._convert_structures(body)
+            # 선행 공백 패딩 — `2\sqrt{2}` 가 '2sqrt' 로 융합하지 않게
+            # (_replace_one_arg_commands 와 동일 가드).
             if degree is None:
-                replacement = f"sqrt {{{converted_body}}}"
+                replacement = f" sqrt {{{converted_body}}}"
             else:
-                replacement = f"root {degree.strip()} of {{{converted_body}}}"
+                replacement = f" root {degree.strip()} of {{{converted_body}}}"
             text = text[:idx] + replacement + text[end:]
             idx = text.find(marker, idx + len(replacement))
         return text
 
+    def _read_latex_arg(self, text: str, pos: int) -> tuple[str, int] | None:
+        r"""LaTeX 인자 1개 읽기 — '{...}' 그룹 또는 단일 토큰(숫자/글자/\cmd).
+
+        LaTeX 규약상 중괄호 없는 인자는 정확히 토큰 1개다(\frac12 = 1/2,
+        \frac\pi2 = π/2, \frac d{dx}). 구조 특수문자(중괄호 짝·첨자·정렬 등)나
+        문자열 끝이면 None — 호출부가 강등 경로를 결정한다.
+        """
+        pos = self._skip_spaces(text, pos)
+        if pos >= len(text):
+            return None
+        if text[pos] == "{":
+            try:
+                return self._read_balanced(text, pos, "{", "}")
+            except ValueError:
+                return None
+        token = re.match(r"\\[A-Za-z]+|[^\s{}\\^_&$%#]", text[pos:])
+        if token is None:
+            return None
+        return token.group(0), pos + token.end()
+
     def _replace_two_braced_args(self, text: str, marker: str, template: str) -> str:
         idx = text.find(marker)
         while idx >= 0:
-            pos = self._skip_spaces(text, idx + len(marker))
-            if pos >= len(text) or text[pos] != "{":
-                idx = text.find(marker, idx + len(marker))
+            after = idx + len(marker)
+            if after < len(text) and text[after].isalpha():
+                # 더 긴 명령의 접두 매칭(\frac in \fracs 등) — 건너뛴다.
+                idx = text.find(marker, after)
                 continue
-            first, pos = self._read_balanced(text, pos, "{", "}")
-            pos = self._skip_spaces(text, pos)
-            if pos >= len(text) or text[pos] != "{":
-                idx = text.find(marker, idx + len(marker))
-                continue
-            second, end = self._read_balanced(text, pos, "{", "}")
+            # LaTeX 규약: 인자는 '{...}' 그룹 또는 단일 토큰(\frac12 = 1/2).
+            # 종전엔 '{' 필수라 통째로 건너뛰어 백슬래시 안전망이 'frac' 알몸
+            # 키워드를 누출했다(fatal 강등). 잘려서 인자가 아예 없으면 hwip 의
+            # 관용과 같게 빈 그룹으로 강등하고, 구조 특수문자가 막아서면 종전
+            # 경로(건너뛰기)로 둔다.
+            first_read = self._read_latex_arg(text, after)
+            if first_read is None:
+                if self._skip_spaces(text, after) >= len(text):
+                    first_read = ("", len(text))
+                else:
+                    idx = text.find(marker, after)
+                    continue
+            first, pos = first_read
+            second_read = self._read_latex_arg(text, pos)
+            if second_read is None:
+                if self._skip_spaces(text, pos) >= len(text):
+                    second_read = ("", len(text))
+                else:
+                    idx = text.find(marker, after)
+                    continue
+            second, end = second_read
             replacement = template % (
                 self._convert_structures(first),
                 self._convert_structures(second),
@@ -510,6 +871,38 @@ class LatexToHwpConverter:
         return pos
 
 
+def _balance_brace_groups(text: str) -> str:
+    r"""중괄호 짝 복구 — 잘린 인자(\frac{a}{b)도 변환 가능하게 만든다.
+
+    부족한 '}' 는 끝에 보충하고 짝 없는 '}' 는 버린다(이스케이프 \{ \} 는
+    세지 않는다 — hwip 토크나이저의 관용과 동일). 불균형 스크립트는 한컴이
+    수식 객체를 그리지 못할 수 있으므로 최종 출력 직전에도 적용한다.
+    """
+    text = str(text or "")
+    depth = 0
+    out: list[str] = []
+    i = 0
+    n = len(text)
+    while i < n:
+        char = text[i]
+        if char == "\\":
+            out.append(text[i : i + 2])
+            i += 2
+            continue
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            if depth == 0:
+                i += 1
+                continue
+            depth -= 1
+        out.append(char)
+        i += 1
+    if depth > 0:
+        out.append("}" * depth)
+    return "".join(out)
+
+
 def brace_unbraced_scripts(script: str) -> str:
     text = str(script or "")
     text = re.sub(r"([_^])(?!\{)([+\-])", r"\1{\2}", text)
@@ -518,14 +911,77 @@ def brace_unbraced_scripts(script: str) -> str:
     return text
 
 
+# 한컴 수식 키워드는 화학식 원소처럼 보여도 절대 앞뒤 토큰과 붙이면 안 된다.
+# 빌트인 변환기는 전대문자 키워드를 내고(DELTA), hwip 엔진은 첫대문자 키워드도
+# 낸다(Delta, LEFT(, RIGHT)). 종전 lookahead 가드는 키워드 '중간' 글자에서
+# 시작하는 매칭(DELTA G 의 끝 'A' + 공백 + G → DELTAG)을 못 막아 깁스 식
+# 'DELTA G = DELTA H - T DELTA S' 가 'DELTAG = DELTAH - TDELTAS' 로 깨졌다.
+# → 키워드 구간을 통째로 보호(placeholder 치환)한 뒤 압축하고 복원한다.
+# 대소문자 구분이라 원소 In(인듐)·Ta(탄탈럼)와 키워드 IN·Tau 는 충돌하지 않는다.
+EQ_SCRIPT_KEYWORD = (
+    r"\b(?:BUILDREL|TIMES|DIV|APPROX|INF|DELTA|SIGMA|GAMMA|THETA|LAMBDA|XI|PI|"
+    r"OMEGA|PHI|PSI|LEFT|RIGHT|IN|DEG|CASES|"
+    r"ANGSTROM|ASYMP|BOX|CHOOSE|COPROD|DOWNARROW|ELL|EXARROW|IMAG|IMATH|JMATH|"
+    r"LARROW|LLL|LRARROW|OVERBRACE|RARROW|REIMAGE|REL|SQSUBSETEQ|SQSUBSET|"
+    r"SQSUPSETEQ|SQSUPSET|TRIANGLED|UDARROW|UNDERBRACE|UPARROW|VERT|WP|"
+    r"Alpha|Beta|Gamma|Delta|Epsilon|Zeta|Eta|Theta|Iota|Kappa|Lambda|Mu|Nu|"
+    r"Xi|Pi|Rho|Sigma|Tau|Upsilon|Phi|Chi|Psi|Omega)\b"
+)
+
+
 def compact_chemical_spacing(script: str) -> str:
+    text = str(script or "")
+    protected: list[str] = []
+
+    def _protect(match: re.Match[str]) -> str:
+        protected.append(match.group(0))
+        return f"\x00{len(protected) - 1}\x00"
+
+    # 인용 리터럴("percent difference", "Part A")은 통째로 보호한다 —
+    # 내부의 대문자·공백을 화학식 압축이 이어 붙이면 안 된다.
+    text = re.sub(r'"[^"]*"', _protect, text)
+    text = re.sub(EQ_SCRIPT_KEYWORD, _protect, text)
     token = r"(?:[A-Z][a-z]?|\)(?:_\{[^}]+\})?)(?:_\{[^}]+\})?"
-    command = r"(?:BUILDREL|TIMES|DIV|APPROX|INF|DELTA|SIGMA|GAMMA|THETA|LAMBDA|XI|PI|OMEGA|PHI|PSI)\b"
-    return re.sub(
-        rf"({token})\s+(?!{command})(?=[A-Z][a-z]?|\()",
-        r"\1",
-        str(script or ""),
+    text = re.sub(rf"({token})\s+(?=[A-Z][a-z]?|\()", r"\1", text)
+    return re.sub(r"\x00(\d+)\x00", lambda m: protected[int(m.group(1))], text)
+
+
+# 첨자 본문에 이 키워드들이 토큰으로 들어 있으면 텍스트 라벨이 아니라 수학식이다
+# (예: lim 의 `n rarrow inf` — hwip 엔진이 \to/\infty 를 rarrow/inf 로 변환).
+# 이를 인용해 버리면 화살표·∞ 가 문자 그대로 노출되므로 인용에서 제외한다.
+# 그리스 키워드도 포함한다 — \lambda_{\pi} 는 양 엔진 모두 `lambda_{pi}` 를
+# 내는데, pi 를 라벨로 인용하면 π 첨자가 업라이트 문자열 "pi" 로 죽는다.
+# 첨자 라벨이 그리스 문자 '이름'과 정확히 일치하는 경우는 사실상 그리스
+# 기호 의도다(Q_{in}/T_{mid} 류 영어 라벨과 달리 충돌 사례가 없다).
+_SUBSCRIPT_GREEK_TOKENS = frozenset(
+    {
+        "alpha", "beta", "gamma", "delta", "epsilon", "varepsilon", "zeta",
+        "eta", "theta", "vartheta", "iota", "kappa", "lambda", "mu", "nu",
+        "xi", "pi", "varpi", "rho", "varrho", "sigma", "varsigma", "tau",
+        "upsilon", "phi", "varphi", "chi", "psi", "omega",
+    }
+)
+_SUBSCRIPT_MATH_TOKENS = (
+    frozenset(
+        {
+            "rarrow", "larrow", "lrarrow", "uparrow", "downarrow", "inf",
+            "infty", "ldots", "cdots", "vdots", "ddots",
+        }
     )
+    | _SUBSCRIPT_GREEK_TOKENS
+)
+# 다른 토큰과 '함께' 나올 때만 수학식 신호인 관계·연산 키워드 — 경계조건 첨자
+# (max_{1 leq k leq n}, sum_{d mid n}, sup_{x in A})가 통째로 텍스트 라벨로
+# 인용되는 사고를 막는다. 단독 본문은 진짜 라벨일 수 있어(Q_{in}, T_{mid})
+# 현행대로 인용을 유지한다.
+_SUBSCRIPT_MATH_BOUNDARY_TOKENS = frozenset(
+    {
+        "leq", "geq", "neq", "mid", "nmid", "in", "notin", "times", "div",
+        "cdot", "approx", "equiv", "sim", "simeq", "cong", "propto", "mapsto",
+        "subset", "subseteq", "supset", "supseteq", "cup", "cap", "union",
+        "inter", "prec", "succ", "plusminus", "minusplus",
+    }
+)
 
 
 def quote_textual_subscripts(script: str) -> str:
@@ -545,6 +1001,12 @@ def quote_textual_subscripts(script: str) -> str:
             body,
         )
         if textual_label and len(body) >= 2:
+            tokens = re.split(r"[,\s_-]+", body)
+            lowered = {t.lower() for t in tokens}
+            if lowered & _SUBSCRIPT_MATH_TOKENS:
+                return match.group(0)
+            if len(tokens) >= 2 and lowered & _SUBSCRIPT_MATH_BOUNDARY_TOKENS:
+                return match.group(0)
             return f'_{{"{body}"}}'
         return match.group(0)
 
@@ -602,6 +1064,40 @@ def convert_inline_radicals(script: str) -> str:
                         break
                 k += 1
             if inner is not None:
+                if opener == "[":
+                    # LaTeX 식 n제곱근 지수: sqrt[3]{x} / √[3](8) 의 [..] 는
+                    # radicand 가 아니라 지수다. 바로 뒤(공백 허용)에 그룹이
+                    # 따라오면 builtin _replace_sqrt 와 동일한 'root n of {...}'
+                    # 구조로 변환한다. 그룹이 없으면(√[2gh] 단독) 현행대로
+                    # [..] 를 radicand 로 본다.
+                    p = i
+                    while p < n and text[p].isspace():
+                        p += 1
+                    if p < n and text[p] in ("{", "("):
+                        g_open = text[p]
+                        g_close = brackets[g_open]
+                        g_depth = 0
+                        q = p
+                        radicand = None
+                        while q < n:
+                            if text[q] == g_open:
+                                g_depth += 1
+                            elif text[q] == g_close:
+                                g_depth -= 1
+                                if g_depth == 0:
+                                    radicand = text[p + 1:q]
+                                    break
+                            q += 1
+                        if radicand is not None:
+                            out.append(
+                                "root "
+                                + inner.strip()
+                                + " of {"
+                                + radicand.strip()
+                                + "}"
+                            )
+                            i = q + 1
+                            continue
                 out.append("sqrt {" + inner.strip() + "}")
                 continue
             out.append("√")  # unbalanced — fail safe
@@ -642,6 +1138,18 @@ def normalize_hwp_script(script: str) -> str:
         text,
     )
     text = text.replace("<=>", "<->")
+    # hwip 의 빈 구분자(LEFT. / RIGHT. — \left. evaluated-at 표기)는 한컴
+    # 수용이 검증되지 않아 'LEFT.' 리터럴 노출 위험이 있다 — 구분자째
+    # 제거한다(키워드+마침표 조합은 소수점과 혼동될 수 없다). 제거로
+    # LEFT/RIGHT 짝이 깨지면 남은 키워드도 내리고 구분자만 남긴다 —
+    # 미짝 키워드가 글자로 노출되는 것보다 괄호 자동크기 포기가 안전하다.
+    if re.search(r"\b(?:LEFT|RIGHT)\s*\.", text):
+        stripped = re.sub(r"\b(?:LEFT|RIGHT)\s*\.", " ", text)
+        if len(re.findall(r"\bLEFT\b", stripped)) != len(
+            re.findall(r"\bRIGHT\b", stripped)
+        ):
+            stripped = re.sub(r"\b(?:LEFT|RIGHT)\b\s*", "", stripped)
+        text = stripped
     text = re.sub(r"\s+([_^])\s*", r"\1", text)
     text = brace_unbraced_scripts(text)
     text = quote_textual_subscripts(text)
@@ -649,12 +1157,302 @@ def normalize_hwp_script(script: str) -> str:
     text = re.sub(r"\b(APPROX|TIMES|DIV)(?=[A-Za-z0-9{])", r"\1 ", text)
     text = re.sub(r"(?<=[A-Za-z0-9}])(?=(APPROX|TIMES|DIV)\b)", " ", text)
     text = re.sub(r"\s{2,}", " ", text)
+    text = _balance_brace_groups(text)
     return text.strip()
 
 
+# ── hwip 엔진 브리지 (LaTeX → 한컴 수식 스크립트) ──────────────────────────
+# vendor/hwip-converter.js (latex-to-hwp by 신민규 @minigu5, 사용 허락 받음 —
+# vendor/NOTICE 참조)를 node 로 호출해 변환 품질을 올린다. 한컴 공식 명세 기반
+# 파서라 빌트인 문자열 치환기보다 \cdot(내적), \left/\right(괄호 자동크기),
+# \text{한글} 인용 등에서 정확하다.
+#
+# 동작 원칙:
+#  - {{EQ-LATEX:}} / {{EQN-LATEX:}} 만 hwip 우선, 실패한 식은 빌트인 변환기 폴백.
+#  - {{EQ:}}(이미 한컴 스크립트) 경로는 건드리지 않는다.
+#  - node 실행 불가/오류 → 프로세스 단위로 조용히 비활성(빌트인 폴백). 최종
+#    fatal 검증(validate_hwpx_equations)은 기존 정책 그대로 유지된다.
+#  - EQUATION_ENGINE=builtin (또는 off) 으로 즉시 롤백 가능. 기본값은 hwip.
+_HWIP_CLI = Path(__file__).resolve().parent / "vendor" / "hwip-cli.js"
+_hwip_cache: dict[str, str] = {}
+_hwip_failed: set[str] = set()
+_hwip_disabled = False
+
+
+def hwip_engine_enabled() -> bool:
+    if os.environ.get("EQUATION_ENGINE", "hwip").strip().lower() in (
+        "builtin",
+        "off",
+        "0",
+    ):
+        return False
+    return not _hwip_disabled and _HWIP_CLI.exists()
+
+
+def hwip_convert_batch(latex_list: Iterable[str]) -> None:
+    """unique LaTeX 들을 node 1회 호출로 변환해 캐시에 채운다(성공분만).
+
+    실패(null)·오류는 빌트인 폴백으로 흘러가므로 이 함수는 절대 예외를 던지지
+    않는다. 문서당 1회 프리워밍 + 캐시 미스 시 단건 호출 양쪽에서 쓰인다.
+    """
+    global _hwip_disabled
+    if not hwip_engine_enabled():
+        return
+    todo = [
+        t
+        for t in dict.fromkeys(s.strip() for s in latex_list if s and s.strip())
+        if t not in _hwip_cache and t not in _hwip_failed
+    ]
+    if not todo:
+        return
+    try:
+        proc = subprocess.run(
+            ["node", str(_HWIP_CLI)],
+            input=json.dumps({"latex": todo}).encode("utf-8"),
+            capture_output=True,
+            timeout=30,
+        )
+        scripts = json.loads(proc.stdout.decode("utf-8", "replace"))["scripts"]
+        if len(scripts) != len(todo):
+            raise ValueError("hwip output length mismatch")
+        for tex, script in zip(todo, scripts):
+            if isinstance(script, str) and script.strip():
+                _hwip_cache[tex] = script.strip()
+            else:
+                _hwip_failed.add(tex)
+    except Exception as exc:  # node 없음/타임아웃/깨진 출력 → 빌트인으로
+        _hwip_disabled = True
+        print(
+            f"[equation] hwip engine unavailable, using builtin converter: {exc}",
+            file=sys.stderr,
+        )
+
+
+def _expand_mhchem_body(body: str) -> str:
+    """mhchem 반응식 본문을 일반 LaTeX 로 — 첨자·전하·화살표를 살린다."""
+    s = body.strip()
+    # 반응 화살표 (평형 먼저, 그다음 정/역방향)
+    s = re.sub(r"<=>>|<<=>|<=>|<->", r" \\leftrightarrow ", s)
+    s = re.sub(r"->", r" \\rightarrow ", s)
+    s = re.sub(r"<-(?!>)", r" \\leftarrow ", s)
+    # 원소 기호 뒤 숫자 = 아래첨자 (선두 계수 '2H2O'의 2 는 평문 유지)
+    s = re.sub(r"(?<=[A-Za-z\)\]])(\d+)", r"_{\1}", s)
+    # 전하: ^2+, ^-, ^+ → ^{...} (이미 ^{...} 인 것은 그대로)
+    s = re.sub(r"\^(\d*[+-])", r"^{\1}", s)
+    return s
+
+
+def _expand_pu_body(body: str) -> str:
+    r"""mhchem ``\pu{...}`` (물리량+단위) 본문을 일반 LaTeX 로 전개한다.
+
+    평문 본문은 ``\text{...}`` 로 감싸 업라이트 단위 표기(한컴 인용 리터럴)로
+    살리고, 구조가 섞인 본문은 명령 래퍼만 벗긴다 — 어느 쪽이든 'pu' 가
+    글자로 노출되지 않는다. mhchem 고유 표기는 최소만 정규화한다:
+    ``//`` 는 나눗셈, 단위 글자 사이 ``.``/``*`` 는 곱(·)이다.
+    """
+    s = re.sub(r"\s+", " ", body.strip())
+    if not s:
+        return " "
+    s = s.replace("//", "/")
+    s = re.sub(r"(?<=[A-Za-z])[.*](?=[A-Za-z])", "·", s)
+    if not re.search(r'[\\^_{}"$&#%]', s):
+        return r" \text{" + s + "} "
+    return f" {s} "
+
+
+_MHCHEM_COMMANDS = (("\\ce", _expand_mhchem_body), ("\\pu", _expand_pu_body))
+
+
+def expand_mhchem(latex: str) -> str:
+    r"""``\ce{...}``/``\pu{...}`` (mhchem) 를 양 엔진이 이해하는 일반 LaTeX 로
+    전개한다.
+
+    latex_to_script() 진입 직전의 단일 길목이라 hwip·빌트인 모두에 적용된다.
+    이 전처리가 없으면 hwip 은 ce/pu 를 일반 함수로 취급해 'H2'의 2 가 본문
+    숫자로, '->' 가 '`-` `>`' 두 연산자로, 단위가 글자 단위(k J / m o l)로
+    분해되고, 빌트인은 raw \ce 가 백슬래시째 잔존한다.
+    """
+    if not any(cmd in latex for cmd, _expander in _MHCHEM_COMMANDS):
+        return latex
+    out: list[str] = []
+    i = 0
+    n = len(latex)
+    while i < n:
+        matched = None
+        if latex[i] == "\\":
+            for cmd, expander in _MHCHEM_COMMANDS:
+                if latex.startswith(cmd, i) and not (
+                    i + len(cmd) < n and latex[i + len(cmd)].isalpha()
+                ):
+                    matched = (cmd, expander)
+                    break
+        if matched is not None:
+            cmd, expander = matched
+            j = i + len(cmd)
+            while j < n and latex[j].isspace():
+                j += 1
+            if j < n and latex[j] == "{":
+                depth = 0
+                k = j
+                body = None
+                while k < n:
+                    char = latex[k]
+                    if char == "\\":
+                        k += 2
+                        continue
+                    if char == "{":
+                        depth += 1
+                    elif char == "}":
+                        depth -= 1
+                        if depth == 0:
+                            body = latex[j + 1 : k]
+                            break
+                    k += 1
+                if body is not None:
+                    out.append(expander(body))
+                    i = k + 1
+                    continue
+        out.append(latex[i])
+        i += 1
+    return "".join(out)
+
+
+# 유니코드 화살표 → LaTeX 명령 선치환 표. 엔진 '출력' 후의 치환
+# (normalize_hwp_script)만으로는 늦다 — hwip 이 미지의 유니코드 글리프를
+# 텍스트 인용('"⇌"')으로 감싼 뒤에는 치환이 따옴표 안에 떨어져 화살표 기호
+# 대신 리터럴 문자열 '<->' 가 렌더된다. 진입 전에 LaTeX 명령으로 바꾸면
+# hwip 은 lrarrow/rarrow(네이티브 토큰), builtin 은 <->/-> 를 낸다.
+_UNICODE_ARROW_LATEX = (
+    ("⇌", r" \leftrightarrow "),
+    ("⇄", r" \leftrightarrow "),
+    ("↔", r" \leftrightarrow "),
+    ("⟶", r" \rightarrow "),
+    ("→", r" \rightarrow "),
+    ("←", r" \leftarrow "),
+    ("⇒", r" \Rightarrow "),
+)
+
+
+def preprocess_latex_body(raw_latex: str) -> str:
+    """엔진 공통 LaTeX 전처리 — mhchem 전개 + \\limits 제거 + 유니코드 화살표 선치환.
+
+    latex_to_script() 와 hwip 프리워밍이 같은 전처리를 거쳐야 캐시 키가
+    일치한다 — 반드시 이 함수를 같이 쓸 것.
+    """
+    s = expand_mhchem(str(raw_latex or "").strip())
+    # \limits/\nolimits 는 연산자 첨자의 '위치' 힌트일 뿐 그릴 내용이 없다.
+    # hwip 은 미지 명령을 그대로 흘려 '\sum\limits_{...}' 가 'sum limits_{...}'
+    # 로 새고 첨자가 limits 단어에 붙으므로 양 엔진 진입 전에 떼어낸다
+    # (빌트인 COMMANDS 의 매핑은 {{EQ:}} 백슬래시 구제 등 convert 직접 호출
+    # 경로용 이중 안전망).
+    s = re.sub(r"\\(?:no)?limits(?![A-Za-z])", " ", s)
+    for glyph, command in _UNICODE_ARROW_LATEX:
+        if glyph in s:
+            s = s.replace(glyph, command)
+    return s.strip()
+
+
+def latex_to_script(raw_latex: str) -> str:
+    """LaTeX → 한컴 스크립트. hwip 우선, 식 단위로 빌트인 폴백."""
+    raw_latex = preprocess_latex_body(raw_latex)
+    if hwip_engine_enabled():
+        if raw_latex not in _hwip_cache and raw_latex not in _hwip_failed:
+            hwip_convert_batch([raw_latex])
+        script = _hwip_cache.get(raw_latex)
+        if script is not None:
+            return script
+    return LatexToHwpConverter().convert(raw_latex)
+
+
+EQ_MARKER_PREFIXES = ("{{EQN-LATEX:", "{{EQ-LATEX:", "{{EQN:", "{{EQ:")
+
+# 근접 오타 마커 교정용. EQN 을 EQ 보다 앞에 둔다(긴 어간 우선).
+# 잡는 변형: 소문자({{eq:), 콜론 앞뒤 공백({{EQN-LATEX :), 전각 콜론
+# ({{EQ-LATEX：), 하이픈 누락/언더스코어/공백 구분({{EQLATEX:, {{EQ_LATEX:,
+# {{EQ LATEX:), 단일 여는 중괄호({EQ-LATEX:). 콜론이 반드시 따라와야 매칭되어
+# 일반 산문·한컴 스크립트 그룹({EQN} 등)은 건드리지 않는다.
+# 주의: lib/pipelines/chem-pre/hwpx-gen.py 에 동일 미러가 있다 — 함께 수정할 것.
+_EQ_PREFIX_RESCUE_RE = re.compile(
+    r"\{\{?\s*(EQN|EQ)\s*[-_]?\s*(LATEX)?\s*[:：]", re.IGNORECASE
+)
+
+
+def _canonical_eq_prefix(m: re.Match[str]) -> str:
+    """교정 콜백 — 어간(EQ/EQN)과 LATEX 유무로 정규 프리픽스를 재조립한다.
+
+    단일 중괄호 입력도 항상 '{{' 로 정규화한다(이후 스캐너가 인식하도록).
+    """
+    stem = m.group(1).upper()
+    return "{{" + stem + ("-LATEX:" if m.group(2) else ":")
+
+
+def canonicalize_equation_marker_prefixes(text: str) -> str:
+    """마커 프리픽스의 흔한 오타를 정규형('{{EQ[-LATEX]:')으로 교정한다.
+
+    오타 마커는 스캐너(prefixes 정확 일치)가 못 찾아 변환이 통째로 누락된다 —
+    대문자 오타는 validate 의 '{{EQ' 검사에 걸려 보고서 전체가 fatal 나고,
+    소문자는 아무도 못 잡아 본문에 조용히 노출된다. 변환 전에 정규형으로
+    되살려 정상 경로로 태운다. (단일 중괄호 변형 {EQ-LATEX:...} 의 닫는
+    중괄호 1개 부족은 lenient 스캐너의 외톨이 '}' 종결 규칙이 흡수한다.)
+    """
+    text = str(text or "")
+    if "{" not in text:
+        return text
+    return _EQ_PREFIX_RESCUE_RE.sub(_canonical_eq_prefix, text)
+
+
+def _delatexed_plain_text(text: str) -> str:
+    """LaTeX 백슬래시·마커 프리픽스·수식 구분자($)를 제거한 안전한 평문."""
+    text = re.sub(r"\{\{(?:EQN-LATEX|EQ-LATEX|EQN|EQ):", "", str(text or ""))
+    text = re.sub(r"\\([A-Za-z]+)", r"\1 ", text)
+    text = text.replace("\\", " ")
+    text = re.sub(r"\$+", "", text)
+    return re.sub(r"\s{2,}", " ", text).strip()
+
+
+def _resolve_nested_markers(kind: str, body: str) -> str:
+    """본문 안에 중첩된 {{EQ*:...}} 마커 문법을 풀어낸다(마커 잔존 금지).
+
+    바깥 스캐너는 안쪽 '{{'를 중괄호 깊이로 흡수하므로 body 에 마커 리터럴이
+    그대로 들어온다 — 그대로 두면 한컴 수식 안에 '{{EQ:b}}' 가 노출된다.
+    안쪽 마커는 문법만 벗겨 본문으로 흡수한다(LaTeX ↔ 한컴 스크립트 혼용 시
+    안쪽 본문을 먼저 변환해 잇는다).
+    """
+    inner = find_equation_placeholders(body, strict=False)
+    out: list[str] = []
+    cursor = 0
+    for ph in inner:
+        out.append(body[cursor : ph.start])
+        inner_body = ph.body
+        if "{{EQ" in inner_body:
+            inner_body = _resolve_nested_markers(ph.kind, inner_body)
+        if ph.kind.endswith("-LATEX") and not kind.endswith("-LATEX"):
+            try:
+                inner_body = latex_to_script(inner_body)
+            except Exception:
+                inner_body = _delatexed_plain_text(inner_body)
+        out.append(inner_body)
+        cursor = ph.end
+    tail = body[cursor:]
+    if "{{EQ" in tail:
+        tail = re.sub(r"\{\{(?:EQN-LATEX|EQ-LATEX|EQN|EQ):", "", tail)
+    out.append(tail)
+    return "".join(out)
+
+
 def placeholder_to_script(kind: str, raw_script: str) -> str:
-    raw_script = raw_script.strip()
+    raw_script = canonicalize_equation_marker_prefixes(raw_script.strip())
+    if "{{EQ" in raw_script:
+        # 모델이 마커를 겹쳐 쓴 경우 — 안쪽 마커 문법을 풀어 본문으로 흡수.
+        raw_script = _resolve_nested_markers(kind, raw_script)
     if kind.endswith("-LATEX"):
+        return normalize_hwp_script(latex_to_script(raw_script))
+    if "\\" in raw_script:
+        # {{EQ:}}(한컴 스크립트) 경로에 LaTeX 명령이 섞여 들어온 모델 실수 —
+        # 백슬래시 잔재가 수식에 노출되지 않도록 구제한다. 단, hwip
+        # (latex_to_script)은 한컴 키워드(over/cases/rm/matrix)를 미지의
+        # 단어로 보고 글자 단위로 분해하므로 절대 태우지 않는다 — 미지
+        # 토큰을 보존하면서 \cmd 만 치환·제거하는 빌트인 변환기로만 구제한다.
         return normalize_hwp_script(LatexToHwpConverter().convert(raw_script))
     return normalize_hwp_script(raw_script)
 
@@ -663,33 +1461,39 @@ def is_numbered_placeholder(kind: str) -> bool:
     return kind.startswith("EQN")
 
 
+def _equation_body_to_plain_text(kind: str, body: str) -> str:
+    """마커 본문을 안전한 평문으로 — 마커 문법·백슬래시 잔재를 남기지 않는다."""
+    body = (body or "").strip()
+    if not body:
+        return ""
+    try:
+        script = placeholder_to_script(kind, body)
+        if script.strip():
+            return script
+    except Exception:
+        pass
+    return _delatexed_plain_text(body)
+
+
 def strip_equation_markers_for_text(text: str) -> str:
     """Return a readable plain-text fallback for malformed equation markers.
 
     Report generation should not fail just because one model-produced
-    `{{EQ:...}}` span has unbalanced braces. In that case, keep the formula text
-    visible and remove the internal marker syntax so validation does not reject
-    the whole HWPX file.
+    `{{EQ:...}}` span has unbalanced braces. 마커 구간만 외과적으로 처리한다:
+    본문은 가능하면 한컴 스크립트 텍스트로 변환해 남기고(raw `\\frac` 잔재
+    금지), 마커 밖의 '}}' 같은 일반 산문 중괄호는 절대 건드리지 않는다.
     """
-    text = str(text or "")
-    try:
-        placeholders = find_equation_placeholders(text)
-    except ValueError:
-        placeholders = []
-
-    if placeholders:
-        parts: list[str] = []
-        cursor = 0
-        for placeholder in placeholders:
-            parts.append(text[cursor : placeholder.start])
-            parts.append(placeholder.body.strip())
-            cursor = placeholder.end
-        parts.append(text[cursor:])
-        text = "".join(parts)
-
-    text = re.sub(r"\{\{(?:EQN-LATEX|EQ-LATEX|EQN|EQ):", "", text)
-    text = text.replace("}}", "")
-    return text
+    text = canonicalize_equation_marker_prefixes(str(text or ""))
+    parts: list[str] = []
+    cursor = 0
+    for placeholder in _find_placeholders_lenient(text):
+        parts.append(text[cursor : placeholder.start])
+        parts.append(
+            _equation_body_to_plain_text(placeholder.kind, placeholder.body)
+        )
+        cursor = placeholder.end
+    parts.append(text[cursor:])
+    return "".join(parts)
 
 
 @dataclass(frozen=True)
@@ -704,7 +1508,7 @@ def find_equation_placeholders(text: str, strict: bool = True) -> list[Placehold
     """Find {{EQ:...}} blocks while allowing balanced braces inside the body."""
     placeholders: list[Placeholder] = []
     pos = 0
-    prefixes = ("{{EQN-LATEX:", "{{EQ-LATEX:", "{{EQN:", "{{EQ:")
+    prefixes = EQ_MARKER_PREFIXES
 
     while True:
         starts = [
@@ -748,6 +1552,98 @@ def find_equation_placeholders(text: str, strict: bool = True) -> list[Placehold
             return placeholders
 
 
+def _scan_marker_body_lenient(text: str, body_start: int) -> tuple[str, int]:
+    """마커 본문을 관대하게 읽는다(절대 예외를 던지지 않는다).
+
+    종결자는 ① 깊이 0 의 '}}', ② 깊이 0 에서 공백/줄끝/다음 마커 직전의
+    외톨이 '}' (닫는 중괄호 1개가 모자란 흔한 모델 실수), ③ 텍스트 끝.
+    마커 밖의 중괄호는 절대 건드리지 않는다.
+    """
+    depth = 0
+    i = body_start
+    n = len(text)
+    while i < n:
+        char = text[i]
+        if char == "\\":
+            i += 2
+            continue
+        if char == "{":
+            depth += 1
+            i += 1
+            continue
+        if char == "}":
+            if depth > 0:
+                depth -= 1
+                i += 1
+                continue
+            if i + 1 < n and text[i + 1] == "}":
+                return text[body_start:i], i + 2
+            nxt = text[i + 1 : i + 2]
+            if nxt == "" or nxt.isspace() or text.startswith("{{EQ", i + 1):
+                return text[body_start:i], i + 1
+            i += 1
+            continue
+        i += 1
+    return text[body_start:], n
+
+
+def _find_placeholders_lenient(text: str) -> list[Placeholder]:
+    """관대한 마커 탐색 — 잘 닫힌 마커는 strict 와 동일하게, 미폐합 마커는
+    _scan_marker_body_lenient 의 종결 규칙으로 본문을 복구해 돌려준다."""
+    placeholders: list[Placeholder] = []
+    pos = 0
+    while True:
+        starts = [
+            (text.find(prefix, pos), prefix)
+            for prefix in EQ_MARKER_PREFIXES
+            if text.find(prefix, pos) >= 0
+        ]
+        if not starts:
+            return placeholders
+        start, prefix = min(starts, key=lambda item: item[0])
+        body, end = _scan_marker_body_lenient(text, start + len(prefix))
+        placeholders.append(
+            Placeholder(start=start, end=end, kind=prefix[2:-1], body=body)
+        )
+        pos = end
+
+
+def _placeholder_replacement_runs(
+    placeholder: Placeholder,
+    run_attrs: dict[str, str],
+    id_gen: IdGenerator,
+    style: EquationStyle,
+    context: ReplacementContext,
+) -> list[ET.Element]:
+    """마커 1개를 대체할 run 목록을 만든다(절대 예외를 던지지 않는다).
+
+    - 빈 본문 마커({{EQ:}} 등)는 수식 객체 없이 제거한다 — 빈 hp:script 는
+      validate_hwpx_equations 가 fatal 로 보기 때문이다.
+    - 변환 예외·빈 변환 결과('$' 등)는 마커 문법을 벗긴 평문으로 강등한다.
+      어떤 경우에도 raw 마커나 백슬래시 LaTeX 가 본문에 남지 않는다.
+    """
+    body = placeholder.body.strip()
+    if not body:
+        return []
+    try:
+        script = placeholder_to_script(placeholder.kind, placeholder.body)
+    except Exception as exc:
+        print(
+            f"[hwpx-equation] equation conversion failed; kept as plain text: {exc}",
+            file=sys.stderr,
+        )
+        script = ""
+    if not script.strip():
+        fallback = _delatexed_plain_text(body)
+        return [make_text_run(fallback, run_attrs)] if fallback else []
+    result = [make_equation_run(script, id_gen.next(), run_attrs, style=style)]
+    if is_numbered_placeholder(placeholder.kind):
+        number = context.next_equation_number
+        context.next_equation_number += 1
+        result.append(make_text_run(f" ({number})", run_attrs))
+    return result
+
+
 def split_text_into_runs(
     text: str,
     run_attrs: dict[str, str],
@@ -765,12 +1661,11 @@ def split_text_into_runs(
         if before:
             result.append(make_text_run(before, run_attrs))
 
-        script = placeholder_to_script(placeholder.kind, placeholder.body)
-        result.append(make_equation_run(script, id_gen.next(), run_attrs, style=style))
-        if is_numbered_placeholder(placeholder.kind):
-            number = context.next_equation_number
-            context.next_equation_number += 1
-            result.append(make_text_run(f" ({number})", run_attrs))
+        result.extend(
+            _placeholder_replacement_runs(
+                placeholder, run_attrs, id_gen, style, context
+            )
+        )
         count += 1
         cursor = placeholder.end
 
@@ -781,10 +1676,13 @@ def split_text_into_runs(
 
 
 def is_plain_text_run(elem: ET.Element) -> bool:
+    # hp:t 가 자식 요소(lineBreak 등)를 가지면 텍스트 전용 재구성 대상이 아니다
+    # — 부주의하게 재구성하면 자식 요소와 tail 텍스트가 통째로 사라진다.
     return (
         elem.tag == qname(HP_NS, "run")
         and len(elem) == 1
         and elem[0].tag == qname(HP_NS, "t")
+        and len(elem[0]) == 0
     )
 
 
@@ -858,16 +1756,18 @@ def replace_placeholders_in_run_group(
     for placeholder in find_equation_placeholders(text):
         result.extend(text_slice_to_runs(spans, cursor, placeholder.start))
         run_attrs = attrs_at_position(spans, placeholder.start)
-        script = placeholder_to_script(placeholder.kind, placeholder.body)
-        result.append(make_equation_run(script, id_gen.next(), run_attrs, style=style))
-        if is_numbered_placeholder(placeholder.kind):
-            number = context.next_equation_number
-            context.next_equation_number += 1
-            result.append(make_text_run(f" ({number})", run_attrs))
+        result.extend(
+            _placeholder_replacement_runs(
+                placeholder, run_attrs, id_gen, style, context
+            )
+        )
         count += 1
         cursor = placeholder.end
 
     result.extend(text_slice_to_runs(spans, cursor, len(text)))
+    if not result:
+        # 그룹 전체가 빈 마커뿐이던 경우 — 문단이 비지 않게 빈 텍스트 run 유지
+        result.append(make_text_run("", dict(runs[0].attrib) if runs else {}))
     return result, count
 
 
@@ -876,35 +1776,331 @@ def replace_placeholders_in_run_group_lenient(
     id_gen: IdGenerator,
     style: EquationStyle,
     context: ReplacementContext,
+    anchors: list[tuple[int, ET.Element]] | None = None,
 ) -> tuple[list[ET.Element], int]:
-    """Convert valid placeholders and leave malformed markers as plain text."""
+    """Convert placeholders leniently — never raises.
+
+    잘 닫힌 마커는 그대로 변환하고, 닫는 중괄호가 모자란 마커는 관대한 종결
+    규칙으로 복구해 변환한다. 변환 불가 마커는 마커 문법만 벗긴 평문으로
+    강등된다(_placeholder_replacement_runs). anchors(마커 본문을 가로지른
+    비텍스트 run)는 마커 밖이면 제 위치에, 마커 안이면 수식 run 바로 뒤에
+    보존한다 — 절대 버리지 않는다.
+    """
     spans = build_text_run_spans(runs)
     text = "".join(span.text for span in spans)
+    pending = sorted(anchors or [], key=lambda item: item[0])
     result: list[ET.Element] = []
     count = 0
     cursor = 0
 
-    for placeholder in find_equation_placeholders(text, strict=False):
-        result.extend(text_slice_to_runs(spans, cursor, placeholder.start))
+    def emit_plain(upto: int) -> None:
+        nonlocal cursor
+        while pending and pending[0][0] <= upto:
+            offset, elem = pending.pop(0)
+            if offset > cursor:
+                result.extend(text_slice_to_runs(spans, cursor, offset))
+                cursor = offset
+            result.append(elem)
+        if upto > cursor:
+            result.extend(text_slice_to_runs(spans, cursor, upto))
+            cursor = upto
+
+    for placeholder in _find_placeholders_lenient(text):
+        emit_plain(placeholder.start)
         run_attrs = attrs_at_position(spans, placeholder.start)
-        script = placeholder_to_script(placeholder.kind, placeholder.body)
-        result.append(make_equation_run(script, id_gen.next(), run_attrs, style=style))
-        if is_numbered_placeholder(placeholder.kind):
-            number = context.next_equation_number
-            context.next_equation_number += 1
-            result.append(make_text_run(f" ({number})", run_attrs))
+        result.extend(
+            _placeholder_replacement_runs(
+                placeholder, run_attrs, id_gen, style, context
+            )
+        )
         count += 1
         cursor = placeholder.end
+        # 마커 본문을 가로질렀던 비텍스트 run 은 수식 직후에 보존한다.
+        while pending and pending[0][0] <= placeholder.end:
+            result.append(pending.pop(0)[1])
 
-    if cursor < len(text):
-        tail_text = strip_equation_markers_for_text(text[cursor:])
-        if tail_text:
-            result.append(make_text_run(tail_text, attrs_at_position(spans, cursor)))
+    emit_plain(len(text))
+    for _offset, elem in pending:
+        result.append(elem)
 
     if not result:
         run_attrs = dict(runs[0].attrib) if runs else {}
         result.append(make_text_run(strip_equation_markers_for_text(text), run_attrs))
     return result, count
+
+
+def _flatten_structured_text_run(run: ET.Element) -> list[ET.Element]:
+    """<hp:t>a<lineBreak/>b</hp:t> 를 [a run, 요소 run, b run] 으로 분해한다.
+
+    자식 요소는 자기만의 hp:t/run 에 보존되고(텍스트 없음 → 비텍스트 run 으로
+    취급되어 anchor 브리지를 탄다), tail 텍스트는 평범한 텍스트 run 이 되어
+    마커 스캐너가 볼 수 있게 된다.
+    """
+    attrs = dict(run.attrib)
+    t = run[0]
+    pieces: list[ET.Element] = []
+    if t.text:
+        pieces.append(make_text_run(t.text, attrs))
+    for sub in list(t):
+        tail = sub.tail
+        sub.tail = None
+        holder = ET.Element(qname(HP_NS, "run"), dict(attrs))
+        holder_t = ET.SubElement(holder, qname(HP_NS, "t"))
+        holder_t.append(sub)
+        pieces.append(holder)
+        if tail:
+            pieces.append(make_text_run(tail, attrs))
+    if not pieces:
+        pieces.append(make_text_run("", attrs))
+    return pieces
+
+
+def _normalize_paragraph_text_nodes(para: ET.Element) -> bool:
+    """마커 변환 전 문단 텍스트 정리. 반환값: 트리 변경 여부.
+
+    - 마커 프리픽스 오타({{eq:, {{EQN-LATEX : 등)를 정규형으로 교정한다
+      (hp:t 의 text 와 자식 요소의 tail 모두).
+    - 문단에 마커가 있으면, 자식 요소(lineBreak 등)를 품은 hp:t 를 평문
+      run + 요소 run 으로 분해한다 — tail 에 걸친 마커가 통째로 누락되거나
+      재구성 과정에서 자식 요소·tail 이 삭제되는 블라인드를 없앤다.
+    """
+    changed = False
+    run_tag = qname(HP_NS, "run")
+    t_tag = qname(HP_NS, "t")
+
+    def _is_text_shaped(run: ET.Element) -> bool:
+        return run.tag == run_tag and len(run) == 1 and run[0].tag == t_tag
+
+    for run in para:
+        if not _is_text_shaped(run):
+            continue
+        t = run[0]
+        fixed = canonicalize_equation_marker_prefixes(t.text or "")
+        if fixed != (t.text or ""):
+            t.text = fixed
+            changed = True
+        for sub in t:
+            fixed_tail = canonicalize_equation_marker_prefixes(sub.tail or "")
+            if fixed_tail != (sub.tail or ""):
+                sub.tail = fixed_tail
+                changed = True
+
+    para_text = "".join(
+        "".join(run[0].itertext()) for run in para if _is_text_shaped(run)
+    )
+    if "{{EQ" not in para_text:
+        return changed
+
+    index = 0
+    while index < len(para):
+        run = para[index]
+        if _is_text_shaped(run) and len(run[0]):
+            pieces = _flatten_structured_text_run(run)
+            para.remove(run)
+            for offset, piece in enumerate(pieces):
+                para.insert(index + offset, piece)
+            index += len(pieces)
+            changed = True
+            continue
+        index += 1
+    return changed
+
+
+# ── 마커 없는 '변환 가능' 잔재 구제(최후 안전망) ────────────────────────────
+# validate 의 잔재 검사(_LATEX_RESIDUE_RE/_HWP_SCRIPT_RESIDUE_RE)는 마커 없이
+# 본문에 흘러나온 \frac{1}{2}, {실제} over 이론질량, sqrt {Ka over C} 같은
+# 조각을 fatal 로 본다. 검출과 구제의 커버리지가 어긋나면 '변환 가능한' 입력이
+# 구제 시도조차 없이 보고서 생성 전체를 죽이므로(가용성 사고), 마커 변환이
+# 끝난 뒤 남은 잔재 중 변환 가능한 조각만 보수적으로(주변 산문 흡수 없이)
+# 수식으로 구제한다. 변환이 정말 실패한 잔재만 validate 의 fatal 로 남는다.
+_RESIDUE_BRACED = r"\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}"
+_RESIDUE_WORD = r"[A-Za-z0-9.()!^_+\-가-힣]+"
+_RESIDUE_LATEX_FRAGMENT_RE = re.compile(
+    # \left...\right 짝과 \begin{env}...\end{env} 짝을 먼저(내부 \frac 포함
+    # 통째로), 그다음 인자 있는 명령, 마지막에 외톨이 반쪽 순으로 잡는다.
+    r"\\left\b.{0,200}?\\right\s*(?:\\[{}()|]|[()\[\]|.])?"
+    r"|\\begin\s*\{([A-Za-z*]+)\}.{0,800}?\\end\s*\{\1\}"
+    rf"|\\[dt]?frac\s*{_RESIDUE_BRACED}\s*{_RESIDUE_BRACED}"
+    rf"|\\sqrt\s*(?:\[[^\[\]]*\]\s*)?{_RESIDUE_BRACED}"
+    rf"|\\(?:text|ce)\s*{_RESIDUE_BRACED}"
+    # \sum_{i=1}^{n} 처럼 첨자가 '_' 로 바로 붙는 형태도 잡는다(\b 는 word
+    # char 인 '_' 앞에서 매칭되지 않으므로 (?![A-Za-z]) 를 쓴다).
+    rf"|\\(?:sum|lim|int)(?![A-Za-z])(?:\s*[_^]\s*(?:{_RESIDUE_BRACED}|[A-Za-z0-9+\-]))*"
+    r"|\\(?:left|right)\b\s*(?:\\[{}()|]|[()\[\]|.])?"
+    r"|\\(?:begin|end)\b\s*\{[A-Za-z*]*\}"
+)
+_RESIDUE_HWP_FRAGMENT_RE = re.compile(
+    rf"{_RESIDUE_BRACED}\s*over\b(?:\s*(?:{_RESIDUE_BRACED}|{_RESIDUE_WORD}))?"
+    rf"|{_RESIDUE_WORD}\s*over\s*{_RESIDUE_BRACED}"
+    rf"|\bover\s*{_RESIDUE_BRACED}"
+    rf"|\bsqrt\s*{_RESIDUE_BRACED}"
+)
+
+# 본문(hp:t)에 보이면 안 되는 한컴 수식 스크립트 조각({1} over {2},
+# sqrt {Ka over C}) — validate 의 잔재 검출용. 변환기/게이트
+# (_RESIDUE_HWP_FRAGMENT_RE)와 같은 _RESIDUE_BRACED(중첩 3단) 빌딩블록을
+# 공유한다. 과거 이 검출만 단일 레벨([^{}]*)이어서 'sqrt {x^{2}+1}' 같은
+# 첨자 포함 조각이 구제 게이트에서도 막히고 검출에서도 침묵 통과해 raw
+# 스크립트가 사용자에게 노출됐다. 검출이 구제보다 넓어지면(커버리지 역전)
+# 변환 가능한 입력이 구제 시도 없이 fatal 나므로, 패턴을 넓힐 때는 반드시
+# _RESIDUE_HWP_FRAGMENT_RE 가 같은 입력을 변환할 수 있는지 먼저 확인할 것
+# (구제 ⊇ 검출 방향 유지).
+_HWP_SCRIPT_RESIDUE_RE = re.compile(
+    rf"{_RESIDUE_BRACED}\s*over\b"
+    rf"|\bover\s*{_RESIDUE_BRACED}"
+    rf"|\bsqrt\s*{_RESIDUE_BRACED}"
+)
+
+# 단독 LaTeX 기호 명령 → 유니코드/평문 강등 화이트리스트. 수식화(조각 래핑)
+# 시도 후에도 남은, 인자 없는 기호 명령만 안전하게 평문 문자로 바꾼다 —
+# \times 100, E = h\nu, \Delta G 처럼 frac/sqrt 류 구조가 없어 검출
+# (_LATEX_RESIDUE_RE)도 구제(조각 래핑)도 못 잡던 사각의 보수적 폴백이다.
+# '=' 포함 산문 전체를 수식으로 승격하는 공격적 방식은 오탐 위험으로 금지,
+# 검출(fatal) 확대도 금지. 구조 명령(frac/sqrt/sum/lim/int …)과 미지 명령은
+# 절대 넣지 않는다(미지 명령은 보존 — 조용한 의미 파괴 방지).
+# 주의: lib/pipelines/chem-pre/hwpx-gen.py 에 동일 미러가 있다 — 함께 수정할
+# 것(scripts/eq_engine_diff.py 의 미러 동기화 검사가 불일치를 잡는다).
+_BARE_LATEX_SYMBOL_MAP = {
+    # 연산자/관계
+    "times": "×", "cdot": "·", "div": "÷", "pm": "±", "mp": "∓",
+    "approx": "≈", "sim": "~", "simeq": "≃", "cong": "≅", "equiv": "≡",
+    "neq": "≠", "ne": "≠", "leq": "≤", "le": "≤", "geq": "≥", "ge": "≥",
+    "ll": "≪", "gg": "≫", "propto": "∝", "infty": "∞", "partial": "∂",
+    "nabla": "∇", "degree": "°", "circ": "°", "bullet": "•",
+    "ldots": "…", "cdots": "⋯", "dots": "…", "prime": "′", "prod": "∏",
+    # 화살표
+    "rightarrow": "→", "to": "→", "longrightarrow": "→", "Rightarrow": "⇒",
+    "leftarrow": "←", "longleftarrow": "←", "Leftarrow": "⇐",
+    "leftrightarrow": "↔", "Leftrightarrow": "⇔", "rightleftharpoons": "⇌",
+    "uparrow": "↑", "downarrow": "↓",
+    # 그리스 소문자
+    "alpha": "α", "beta": "β", "gamma": "γ", "delta": "δ",
+    "epsilon": "ε", "varepsilon": "ε", "zeta": "ζ", "eta": "η",
+    "theta": "θ", "vartheta": "ϑ", "iota": "ι", "kappa": "κ",
+    "lambda": "λ", "mu": "μ", "nu": "ν", "xi": "ξ", "pi": "π",
+    "varpi": "ϖ", "rho": "ρ", "varrho": "ϱ", "sigma": "σ",
+    "varsigma": "ς", "tau": "τ", "upsilon": "υ", "phi": "φ",
+    "varphi": "φ", "chi": "χ", "psi": "ψ", "omega": "ω",
+    # 그리스 대문자
+    "Gamma": "Γ", "Delta": "Δ", "Theta": "Θ", "Lambda": "Λ", "Xi": "Ξ",
+    "Pi": "Π", "Sigma": "Σ", "Upsilon": "Υ", "Phi": "Φ", "Psi": "Ψ",
+    "Omega": "Ω",
+    # 함수명 — 백슬래시만 벗긴다(업라이트 평문 표기)
+    "ln": "ln", "log": "log", "lg": "lg", "exp": "exp",
+    "sin": "sin", "cos": "cos", "tan": "tan", "cot": "cot",
+    "sec": "sec", "csc": "csc", "sinh": "sinh", "cosh": "cosh",
+    "tanh": "tanh", "arcsin": "arcsin", "arccos": "arccos",
+    "arctan": "arctan", "min": "min", "max": "max", "deg": "deg",
+    "mod": "mod",
+}
+_BARE_LATEX_SYMBOL_CMD_RE = re.compile(r"\\([A-Za-z]+)")
+
+
+def replace_bare_latex_symbol_commands(text):
+    r"""평문 속 단독 LaTeX 기호 명령(\times, \nu, \Delta …)을 유니코드로 강등.
+
+    _BARE_LATEX_SYMBOL_MAP 화이트리스트에 있는 명령만 바꾸고, 미지 명령
+    (\nuclear 등 — 명령 이름은 [A-Za-z]+ 최장 일치라 \nu 가 \nuclear 의
+    일부를 먹는 일은 없다)과 구조 명령은 그대로 둔다. 마커({{EQ*:...}})
+    본문 보호는 호출부 몫이다 — 반드시 마커 밖 구간만 넘길 것.
+    주의: lib/pipelines/chem-pre/hwpx-gen.py 에 동일 미러가 있다 — 함께 수정할 것.
+    """
+    s = str(text or "")
+    if "\\" not in s:
+        return s
+
+    def _one(m):
+        repl = _BARE_LATEX_SYMBOL_MAP.get(m.group(1))
+        if repl is None:
+            return m.group(0)
+        prev = s[m.start() - 1] if m.start() > 0 else ""
+        # 'ln'/'log' 같은 영문자 치환이 앞 토큰에 들러붙지 않게 한 칸 띄운다
+        # (-RT\ln K → -RT ln K). 기호(×, Δ …) 치환은 그대로 잇는다(h\nu → hν).
+        if repl[:1].isascii() and repl[:1].isalpha() and prev.isascii() and prev.isalnum():
+            return " " + repl
+        return repl
+
+    return _BARE_LATEX_SYMBOL_CMD_RE.sub(_one, s)
+
+
+def _demote_bare_latex_symbols_outside_markers(text: str) -> str:
+    """마커({{EQ*:...}}) 밖 평문 구간의 단독 LaTeX 기호 명령만 유니코드로 강등.
+
+    마커 본문(LaTeX 원문)은 변환 엔진 몫이므로 절대 건드리지 않는다.
+    """
+    s = str(text or "")
+    if "\\" not in s:
+        return s
+    parts: list[str] = []
+    cursor = 0
+    for ph in _find_placeholders_lenient(s):
+        parts.append(replace_bare_latex_symbol_commands(s[cursor : ph.start]))
+        parts.append(s[ph.start : ph.end])
+        cursor = ph.end
+    parts.append(replace_bare_latex_symbol_commands(s[cursor:]))
+    return "".join(parts)
+
+
+def rescue_convertible_residue_text(text: str) -> str:
+    """마커 없는 본문 텍스트의 변환 가능한 수식 잔재를 {{EQ*:...}} 로 감싼다.
+
+    잔재 조각 자체만 감싸고 주변 산문은 흡수하지 않는다. 이미 마커가 있는
+    텍스트는 건드리지 않는다 — 마커 잔존은 별도 fatal 경로의 몫이다.
+    수식화로 못 감싼 단독 LaTeX 기호 명령(\\times, \\nu …)은 마지막에
+    유니코드 평문으로 강등한다(rescue 먼저 → 남은 기호만 치환).
+    """
+    s = str(text or "")
+    if not s or "{{EQ" in s:
+        return s
+    # 게이트로 _LATEX_RESIDUE_RE 를 쓰지 않는다 — \b 가 '_' 앞에서 매칭되지
+    # 않아 \sum_{i=1} 류를 놓친다. 조각 정규식 자체가 백슬래시 명령 기준이라
+    # 산문 오탐이 없다(구제 커버리지 ⊇ 검출 커버리지 방향만 허용).
+    if "\\" in s:
+        s = _RESIDUE_LATEX_FRAGMENT_RE.sub(
+            lambda m: "{{EQ-LATEX:" + m.group(0) + "}}", s
+        )
+    # 한컴 스크립트 조각 게이트는 변환 정규식(_RESIDUE_HWP_FRAGMENT_RE) 자체를
+    # 공유한다 — 게이트(과거 단일 레벨 _HWP_SCRIPT_RESIDUE_RE)와 변환기(중첩
+    # 3단)가 어긋나 'sqrt {x^{2}+1}'·'{T^{2}} over 4' 류가 구제 시도조차 못
+    # 받던 내부 모순의 재발 방지. 백슬래시가 남았으면(조각 래핑으로 못 감싼
+    # 단독 기호 명령) 유니코드 강등 폴백도 거쳐야 하므로 함께 본다.
+    if not _RESIDUE_HWP_FRAGMENT_RE.search(s) and "\\" not in s:
+        return s
+    # ① LaTeX 래핑으로 생긴 마커 본문({{EQ-LATEX:\sqrt{x}}})의 sqrt 가 다시
+    # 잡히지 않도록 마커 밖 구간만 한컴 스크립트 조각을 {{EQ:...}} 로 감싼다.
+    parts: list[str] = []
+    cursor = 0
+    for ph in _find_placeholders_lenient(s):
+        parts.append(
+            _RESIDUE_HWP_FRAGMENT_RE.sub(
+                lambda m: "{{EQ:" + m.group(0) + "}}", s[cursor : ph.start]
+            )
+        )
+        parts.append(s[ph.start : ph.end])
+        cursor = ph.end
+    parts.append(
+        _RESIDUE_HWP_FRAGMENT_RE.sub(
+            lambda m: "{{EQ:" + m.group(0) + "}}", s[cursor:]
+        )
+    )
+    # ② 수식화(①·LaTeX 조각 래핑) 후에도 마커 밖에 남은 단독 기호 명령만
+    # 유니코드로 강등한다 — 마커 본문(\frac, \Delta …)은 변환 엔진 몫.
+    return _demote_bare_latex_symbols_outside_markers("".join(parts))
+
+
+def _marker_continues_past_end(text: str) -> bool:
+    """run 그룹 경계에서 끝난 텍스트에 미완(미폐합) 마커가 걸려 있는지."""
+    if "{{EQ" in text:
+        placeholders = find_equation_placeholders(text, strict=False)
+        cursor = placeholders[-1].end if placeholders else 0
+        if "{{EQ" in text[cursor:]:
+            return True
+    # 프리픽스 자체가 run 경계에서 잘린 경우('{{E' + 'Q-LATEX:...')도 잇는다.
+    for prefix in EQ_MARKER_PREFIXES:
+        for length in range(2, len(prefix)):
+            if text.endswith(prefix[:length]):
+                return True
+    return False
 
 
 def replace_placeholders_in_section(
@@ -920,6 +2116,8 @@ def replace_placeholders_in_section(
     did_change = False
 
     for para in root.findall(f".//{{{HP_NS}}}p"):
+        if _normalize_paragraph_text_nodes(para):
+            did_change = True
         replacements: list[tuple[int, int, list[ET.Element], int]] = []
         children = list(para)
         index = 0
@@ -930,12 +2128,37 @@ def replace_placeholders_in_section(
 
             start = index
             group: list[ET.Element] = []
-            while index < len(children) and is_plain_text_run(children[index]):
-                group.append(children[index])
-                index += 1
+            anchors: list[tuple[int, ET.Element]] = []
+            while index < len(children):
+                child = children[index]
+                if is_plain_text_run(child):
+                    group.append(child)
+                    index += 1
+                    continue
+                group_text = "".join(run[0].text or "" for run in group)
+                if _marker_continues_past_end(group_text) and any(
+                    is_plain_text_run(later) for later in children[index + 1 :]
+                ):
+                    # 비텍스트 run(책갈피·ctrl·lineBreak 등)이 마커 본문을
+                    # 가로질렀다 — 그룹을 끊지 말고 위치를 기억해 보존한다.
+                    anchors.append((len(group_text), child))
+                    index += 1
+                    continue
+                break
 
             group_text = "".join(run[0].text or "" for run in group)
             if "{{EQ" not in group_text:
+                continue
+
+            if anchors:
+                new_runs, count = replace_placeholders_in_run_group_lenient(
+                    group,
+                    id_gen=id_gen,
+                    style=style,
+                    context=context,
+                    anchors=anchors,
+                )
+                replacements.append((start, index, new_runs, count))
                 continue
 
             try:
@@ -953,7 +2176,7 @@ def replace_placeholders_in_section(
                     context=context,
                 )
                 print(
-                    "[hwpx-equation] malformed equation marker left as text: "
+                    "[hwpx-equation] malformed equation marker handled leniently: "
                     f"{exc}",
                     file=sys.stderr,
                 )
@@ -968,6 +2191,49 @@ def replace_placeholders_in_section(
             for offset, run in enumerate(new_runs):
                 para.insert(start + offset, run)
             converted += count
+            did_change = True
+
+    # 2차 — 마커 없이 본문에 남은 '변환 가능' 잔재 구제. 1차에서 마커는 모두
+    # 소진됐으므로 남은 평문 run 의 \frac{1}{2}, {a} over {b}, sqrt {..} 조각을
+    # 마커로 감싸 즉시 변환한다(실패 시 _placeholder_replacement_runs 가 마커
+    # 문법 없는 평문으로 강등). validate 가 fatal 로 보기 전의 마지막 안전망.
+    for para in root.findall(f".//{{{HP_NS}}}p"):
+        index = 0
+        while index < len(para):
+            run = para[index]
+            index += 1
+            if not is_plain_text_run(run):
+                continue
+            text = run[0].text or ""
+            if "\\" not in text and "over" not in text and "sqrt" not in text:
+                continue
+            rescued = rescue_convertible_residue_text(text)
+            if rescued == text:
+                continue
+            run_attrs = dict(run.attrib)
+            new_runs: list[ET.Element] = []
+            cursor = 0
+            for ph in _find_placeholders_lenient(rescued):
+                if ph.start > cursor:
+                    new_runs.append(
+                        make_text_run(rescued[cursor : ph.start], run_attrs)
+                    )
+                new_runs.extend(
+                    _placeholder_replacement_runs(
+                        ph, run_attrs, id_gen, style, context
+                    )
+                )
+                converted += 1
+                cursor = ph.end
+            if cursor < len(rescued):
+                new_runs.append(make_text_run(rescued[cursor:], run_attrs))
+            if not new_runs:
+                new_runs.append(make_text_run("", run_attrs))
+            insert_at = index - 1
+            para.remove(run)
+            for offset, new_run in enumerate(new_runs):
+                para.insert(insert_at + offset, new_run)
+            index = insert_at + len(new_runs)
             did_change = True
 
     if not did_change:
@@ -1018,6 +2284,24 @@ def replace_equation_placeholders(
         sections = [section] if section else find_section_files(zf)
         if not sections:
             raise FileNotFoundError("No Contents/section*.xml files found in HWPX.")
+
+        # hwip 프리워밍: 문서 전체의 {{EQ-LATEX}} 본문을 node 1회 호출로 미리 변환.
+        # 실패해도 무해 — 캐시 미스 식은 단건 호출/빌트인으로 폴백된다.
+        if hwip_engine_enabled():
+            bodies: list[str] = []
+            for section_name in sections:
+                try:
+                    root = ET.fromstring(zf.read(section_name))
+                    text = canonicalize_equation_marker_prefixes(
+                        "".join(root.itertext())
+                    )
+                    for ph in _find_placeholders_lenient(text):
+                        if ph.kind.endswith("-LATEX"):
+                            # latex_to_script 와 같은 전처리 — 캐시 키 일치 필수
+                            bodies.append(preprocess_latex_body(ph.body))
+                except Exception:
+                    continue
+            hwip_convert_batch(bodies)
 
         updates: dict[str, bytes] = {}
         total = 0
@@ -1113,6 +2397,41 @@ def inspect_equations(input_hwpx: Path) -> list[tuple[str, str]]:
     return found
 
 
+# 최종 HWPX에 절대 남아서는 안 되는 금지 수식 마커(CLAUDE.md "절대 하지 말 것").
+# 변환기가 없어 raw 텍스트로 노출되므로, 발견되면 postprocess를 fatal 처리한다.
+FORBIDDEN_EQUATION_MARKERS = ("{{MATH:", "{{FORMULA:", "{{EQUATION:", "[[수식")
+
+# 본문(hp:t)에 보이면 안 되는 원시 LaTeX 잔재 — lenient 경로 누수 안전망.
+_LATEX_RESIDUE_RE = re.compile(
+    r"\\(?:frac|sqrt|left|right|begin|end|sum|lim|int|text|ce)\b"
+)
+# 본문(hp:t)의 한컴 수식 스크립트 잔재 검출(_HWP_SCRIPT_RESIDUE_RE)은
+# 구제 쪽 정의(_RESIDUE_HWP_FRAGMENT_RE)와 같은 빌딩블록을 공유해야 하므로
+# 위쪽 '잔재 구제' 섹션(_RESIDUE_BRACED 옆)에 정의되어 있다.
+# 수식 스크립트(hp:script)에는 백슬래시 명령이 존재할 수 없다 — 어떤 \cmd 든
+# 변환 실패(엔진 강등 잔재) 신호다.
+_SCRIPT_BACKSLASH_RE = re.compile(r"\\[A-Za-z]+|\\[ ,;!]")
+# 백슬래시 없이 남은 LaTeX 전용 구조 키워드 — 변환기가 잘린 인자를 못 읽고
+# 안전망이 백슬래시만 뗀 강등 잔재('frac {a}{b')의 신호다. sqrt/root/over/
+# lim 등 한컴 정식 키워드는 절대 포함하지 않는다. 인용 리터럴("...") 내부는
+# 임의 텍스트이므로 검사 전에 제거하고 본다.
+_SCRIPT_BARE_LATEX_KEYWORD_RE = re.compile(r"\b(?:[dtc]?frac|[dt]?binom)\b")
+
+
+def _forbidden_markers_in(text: str) -> list[str]:
+    if not text:
+        return []
+    upper = text.upper()
+    return [m for m in FORBIDDEN_EQUATION_MARKERS if m.upper() in upper]
+
+
+def _marker_residue_in(text: str) -> bool:
+    """마커 문법 잔재 탐지 — 대소문자·콜론 앞뒤 공백 오타까지 잡는다."""
+    if not text:
+        return False
+    return "{{EQ" in text or bool(_EQ_PREFIX_RESCUE_RE.search(text))
+
+
 def validate_hwpx_equations(input_hwpx: Path) -> list[str]:
     issues: list[str] = []
     try:
@@ -1131,29 +2450,89 @@ def validate_hwpx_equations(input_hwpx: Path) -> list[str]:
                     continue
 
                 for t in root.findall(f".//{{{HP_NS}}}t"):
-                    if t.text and "{{EQ" in t.text:
-                        issues.append(f"{section_name}: unresolved placeholder: {t.text}")
+                    # itertext(): 자식 요소(lineBreak 등)의 tail 텍스트까지 포함
+                    t_text = "".join(t.itertext())
+                    if _marker_residue_in(t_text):
+                        issues.append(f"{section_name}: unresolved placeholder: {t_text}")
+                    if _LATEX_RESIDUE_RE.search(t_text):
+                        issues.append(
+                            f"{section_name}: raw LaTeX residue in text: {t_text}"
+                        )
+                    if _HWP_SCRIPT_RESIDUE_RE.search(t_text):
+                        issues.append(
+                            f"{section_name}: raw equation script in text: {t_text}"
+                        )
+                    for marker in _forbidden_markers_in(t_text):
+                        issues.append(
+                            f"{section_name}: forbidden equation marker {marker!r}: {t_text}"
+                        )
 
+                run_tag = qname(HP_NS, "run")
+                t_tag = qname(HP_NS, "t")
                 for para in root.findall(f".//{{{HP_NS}}}p"):
-                    children = list(para)
-                    index = 0
-                    while index < len(children):
-                        if not is_plain_text_run(children[index]):
-                            index += 1
+                    # 문단 전체 텍스트(비텍스트 run 은 길이 0 취급) — run 경계로
+                    # 쪼개진 마커/잔재를 잡는다. 개별 t 에서 이미 잡힌 것은 제외.
+                    parts: list[str] = []
+                    for child in para:
+                        if child.tag != run_tag:
                             continue
-                        group: list[ET.Element] = []
-                        while index < len(children) and is_plain_text_run(children[index]):
-                            group.append(children[index])
-                            index += 1
-                        group_text = "".join(run[0].text or "" for run in group)
-                        if "{{EQ" in group_text:
-                            issues.append(
-                                f"{section_name}: unresolved split placeholder: {group_text}"
-                            )
+                        for t in child.findall(t_tag):
+                            parts.append("".join(t.itertext()))
+                    para_text = "".join(parts)
+                    if _marker_residue_in(para_text) and not any(
+                        _marker_residue_in(part) for part in parts
+                    ):
+                        issues.append(
+                            f"{section_name}: unresolved split placeholder: {para_text}"
+                        )
+                    if _LATEX_RESIDUE_RE.search(para_text) and not any(
+                        _LATEX_RESIDUE_RE.search(part) for part in parts
+                    ):
+                        issues.append(
+                            f"{section_name}: raw LaTeX residue (split) in text: {para_text}"
+                        )
+                    if _HWP_SCRIPT_RESIDUE_RE.search(para_text) and not any(
+                        _HWP_SCRIPT_RESIDUE_RE.search(part) for part in parts
+                    ):
+                        issues.append(
+                            f"{section_name}: raw equation script (split) in text: {para_text}"
+                        )
+                    split_markers = [
+                        m
+                        for m in _forbidden_markers_in(para_text)
+                        if not any(m in _forbidden_markers_in(p) for p in parts)
+                    ]
+                    for marker in split_markers:
+                        issues.append(
+                            f"{section_name}: forbidden equation marker {marker!r} (split): {para_text}"
+                        )
 
                 for script in root.findall(f".//{{{HP_NS}}}script"):
-                    if not (script.text or "").strip():
+                    script_text = script.text or ""
+                    if not script_text.strip():
                         issues.append(f"{section_name}: empty equation script")
+                        continue
+                    if _marker_residue_in(script_text):
+                        issues.append(
+                            f"{section_name}: marker residue in equation script: {script_text}"
+                        )
+                    if _SCRIPT_BACKSLASH_RE.search(script_text):
+                        issues.append(
+                            f"{section_name}: raw LaTeX residue in equation script: {script_text}"
+                        )
+                    script_sans_quotes = re.sub(r'"[^"]*"', " ", script_text)
+                    if _SCRIPT_BARE_LATEX_KEYWORD_RE.search(script_sans_quotes):
+                        issues.append(
+                            f"{section_name}: bare LaTeX structure keyword in equation script: {script_text}"
+                        )
+                    if script_sans_quotes.count("{") != script_sans_quotes.count("}"):
+                        issues.append(
+                            f"{section_name}: unbalanced braces in equation script: {script_text}"
+                        )
+                    for marker in _forbidden_markers_in(script_text):
+                        issues.append(
+                            f"{section_name}: forbidden equation marker {marker!r} in equation script: {script_text}"
+                        )
     except zipfile.BadZipFile:
         return [f"{input_hwpx} is not a valid HWPX/ZIP file."]
 
@@ -1222,7 +2601,27 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "append":
-        script = LatexToHwpConverter().convert(args.script) if args.latex else args.script
+        raw_script = str(args.script or "")
+        if not raw_script.strip():
+            # make_equation 의 ValueError traceback 대신 명확한 메시지로 종료.
+            print("ERROR: --script is empty — nothing to append.", file=sys.stderr)
+            return 2
+        # --latex 는 본 파이프라인과 동일 경로(placeholder_to_script:
+        # mhchem \ce/\pu 전개·유니코드 화살표 선치환 + hwip 우선/빌트인 폴백
+        # + normalize_hwp_script)로 라우팅한다 — LatexToHwpConverter.convert
+        # 직접 호출은 이 전처리를 전부 우회해 \ce{...} 의 'ce' 영단어 노출
+        # 같은 회귀를 만든다.
+        script = (
+            placeholder_to_script("EQ-LATEX", raw_script)
+            if args.latex
+            else raw_script
+        )
+        if not script.strip():
+            print(
+                "ERROR: LaTeX conversion produced an empty equation script.",
+                file=sys.stderr,
+            )
+            return 2
         append_equation(
             args.input_hwpx,
             args.output_hwpx,
@@ -1237,7 +2636,19 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "convert-latex":
-        print(LatexToHwpConverter().convert(args.latex))
+        raw_latex = str(args.latex or "")
+        if not raw_latex.strip():
+            print("ERROR: empty LaTeX input.", file=sys.stderr)
+            return 2
+        # append --latex 와 동일하게 전체 파이프라인 경로로 변환한다.
+        script = placeholder_to_script("EQ-LATEX", raw_latex)
+        if not script.strip():
+            print(
+                "ERROR: LaTeX conversion produced an empty equation script.",
+                file=sys.stderr,
+            )
+            return 2
+        print(script)
         return 0
 
     if args.command == "inspect":

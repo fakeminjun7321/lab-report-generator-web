@@ -112,7 +112,7 @@ npm start
 | `photos` | file[] | 조건부/선택 | 실험 사진, 데이터 표/그래프 스크린샷 |
 | `date` | text | 선택 | 보고서 날짜 |
 | `studentId` | text | 필수 | 학번. 개인 설정 저장값 fallback 가능 |
-| `model` | text | 선택 | 현재 `claude-opus-4-8`만 허용 |
+| `model` | text | 선택 | `claude-opus-4-8`(기본)·`claude-sonnet-4-6`·GPT(`gpt-5.5`/`gpt-5.4`/`gpt-5.4-mini`) |
 | `format` | text | 선택 | `docx` 또는 `hwpx` |
 | `fontFace` | text | 선택 | `Malgun Gothic`, `Nanum Gothic`, `Nanum Myeongjo`, `함초롬바탕` |
 | `userNotes` | text | 선택 | AI 참고 메모 / 실험자 의견 |
@@ -168,7 +168,7 @@ npm start
 - `.cap` 확장자가 아니면 reject
 - `data`는 `xlsx/xls/csv/txt/md`만 허용
 - `cap`, `data`, `photos`가 모두 없으면 reject
-- `userNotes`는 `normalizeUserNotes()`로 최대 2000자
+- `userNotes`는 `collectUserNotes()`→`normalizeUserNotes()`로 최대 `MAX_USER_NOTES_CHARS`자(기본 12000). `.md`/`.txt` 메모 파일도 합쳐진다.
 - `studentId`는 최대 20자
 
 ## 8. Job과 진행 로그
@@ -475,7 +475,7 @@ Claude에 보내는 이미지 앞에는 설명 text block을 붙인다.
 모델:
 
 - 기본값: `claude-opus-4-8`
-- `server.js` whitelist도 현재 `claude-opus-4-8`만 허용
+- `server.js` whitelist: `claude-opus-4-8`(기본)·`claude-sonnet-4-6`. 단, `phys-result`는 GPT(`gpt-5.5`/`gpt-5.4`/`gpt-5.4-mini`)도 허용
 
 호출 방식:
 

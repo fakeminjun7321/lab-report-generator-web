@@ -5,6 +5,7 @@
     const res = await fetch("/api/version", { cache: "no-store" });
     if (!res.ok) throw new Error("version fetch failed");
     const info = await res.json();
+    if (!info || !info.version) throw new Error("version missing");
     const version = info.shortCommit
       ? `v${info.version} · ${info.shortCommit}`
       : `v${info.version}`;

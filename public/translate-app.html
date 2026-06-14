@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PDF 통번역 · Quilo</title>
+    <meta name="robots" content="noindex" />
+    <style>
+      :root { --bg:#f5f7fb; --card:#fff; --bd:#e3e6ef; --ink:#1c2333; --mut:#6b7280; --acc:#3b5bdb; --accd:#2f49b0; --ok:#1f9d55; }
+      * { box-sizing:border-box; }
+      body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Apple SD Gothic Neo",sans-serif; background:var(--bg); color:var(--ink); }
+      .wrap { max-width:760px; margin:0 auto; padding:28px 18px 60px; }
+      header.top { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+      .logo { width:30px;height:30px;border-radius:8px;background:var(--acc);color:#fff;display:grid;place-items:center;font-weight:800; }
+      h1 { font-size:20px; margin:0; }
+      .sub { color:var(--mut); font-size:13.5px; margin:2px 0 20px; }
+      .card { background:var(--card); border:1px solid var(--bd); border-radius:14px; padding:18px; margin-bottom:14px; }
+      label { display:block; font-size:13px; font-weight:600; margin:0 0 6px; }
+      select, input[type=text], input[type=password] { width:100%; padding:9px 11px; border:1px solid var(--bd); border-radius:9px; font-size:14px; background:#fff; }
+      .row { display:flex; gap:12px; flex-wrap:wrap; }
+      .row > div { flex:1; min-width:160px; }
+      .drop { border:2px dashed #c7cee0; border-radius:12px; padding:26px; text-align:center; cursor:pointer; color:var(--mut); transition:.12s; }
+      .drop:hover, .drop.over { border-color:var(--acc); background:#f0f3ff; color:var(--acc); }
+      .drop b { color:var(--ink); }
+      button { background:var(--acc); color:#fff; border:0; border-radius:10px; padding:11px 18px; font-size:15px; font-weight:600; cursor:pointer; }
+      button:hover { background:var(--accd); } button:disabled { opacity:.5; cursor:not-allowed; }
+      .ghost { background:#eef1fc; color:var(--accd); }
+      .est { font-size:13px; color:var(--mut); margin-top:10px; min-height:18px; }
+      .est b { color:var(--ink); }
+      #log { font-family:ui-monospace,Menlo,monospace; font-size:12px; background:#0f1320; color:#cdd6f4; border-radius:10px; padding:12px; height:240px; overflow:auto; white-space:pre-wrap; display:none; }
+      #result { display:none; margin-top:12px; }
+      .dl { display:inline-block; background:var(--ok); color:#fff; padding:11px 18px; border-radius:10px; text-decoration:none; font-weight:600; }
+      .warn { color:#b45309; font-size:12.5px; }
+      .spin { display:inline-block;width:13px;height:13px;border:2px solid #cbd5e1;border-top-color:var(--acc);border-radius:50%;animation:s .7s linear infinite;vertical-align:-2px; }
+      @keyframes s { to { transform:rotate(360deg); } }
+      /* 로그인 오버레이 */
+      #gate { position:fixed; inset:0; background:#f5f7fb; display:none; place-items:center; z-index:10; }
+      #gate .box { background:#fff; border:1px solid var(--bd); border-radius:16px; padding:28px; width:min(380px,92%); text-align:center; }
+      #gate .err { color:#dc2626; font-size:13px; min-height:18px; margin-top:8px; }
+      .foot { text-align:center; color:var(--mut); font-size:12px; margin-top:24px; }
+      .pill { display:inline-block; background:#eef1fc; color:var(--accd); border-radius:999px; padding:2px 9px; font-size:11px; font-weight:700; }
+    </style>
+  </head>
+  <body>
+    <!-- 코드 게이트 -->
+    <div id="gate">
+      <div class="box">
+        <div class="logo" style="margin:0 auto 12px">Q</div>
+        <h1 style="font-size:18px">PDF 통번역</h1>
+        <p class="sub" style="margin:6px 0 16px">접근 코드를 입력하세요.</p>
+        <input id="code" type="password" placeholder="초대 코드" autocomplete="off" />
+        <div class="err" id="gateErr"></div>
+        <button id="gateBtn" style="width:100%;margin-top:10px">입장</button>
+      </div>
+    </div>
+
+    <div class="wrap" id="app" style="display:none">
+      <header class="top">
+        <div class="logo">Q</div>
+        <h1>PDF 통번역 <span class="pill">베타</span></h1>
+      </header>
+      <p class="sub">그림·표·레이아웃은 그대로 두고 <b>텍스트만 한국어로</b> 바꾼 PDF를 돌려줍니다. 수식 많은 논문·스캔본은 자동으로 재조판/OCR 처리합니다. 외부 전송 없이 서버에서만 처리됩니다.</p>
+
+      <div class="card">
+        <input id="file" type="file" accept="application/pdf,.pdf" style="display:none" />
+        <div class="drop" id="drop"><b>PDF 파일</b>을 끌어다 놓거나 클릭해서 선택하세요</div>
+        <div class="row" style="margin-top:14px">
+          <div>
+            <label>변환 방식</label>
+            <select id="mode">
+              <option value="auto">자동 (추천 — 문서에 맞게)</option>
+              <option value="inplace">빠른 번역 (레이아웃 유지)</option>
+              <option value="retypeset">재조판 (수식·정밀)</option>
+            </select>
+          </div>
+          <div>
+            <label>모델</label>
+            <select id="model">
+              <option value="claude-opus-4-8">Claude Opus 4.8 (정밀, 추천)</option>
+              <option value="claude-sonnet-4-6">Claude Sonnet 4.6 (빠름)</option>
+              <option value="gpt-5.4-mini">GPT-5.4 mini (가장 빠름)</option>
+              <option value="gpt-5.4">GPT-5.4</option>
+              <option value="gpt-5.5">GPT-5.5</option>
+            </select>
+          </div>
+        </div>
+        <div class="est" id="est"></div>
+        <label style="display:flex;gap:8px;align-items:flex-start;margin-top:14px;font-size:12.5px;color:#475067;cursor:pointer;line-height:1.55">
+          <input type="checkbox" id="agree" style="margin-top:2px;width:auto;flex:none" />
+          <span>업로드하는 문서를 <b>번역·복제할 권리가 있으며</b>, <b>개인·학습 목적</b>으로만 사용합니다. 저작권 준수 책임은 이용자 본인에게 있고, 권리 없는 저작물은 올리지 않습니다. <a href="#" id="termsLink" style="color:#3b5bdb">이용약관·개인정보</a></span>
+        </label>
+        <div style="margin-top:12px;display:flex;gap:10px;align-items:center">
+          <button id="go" disabled>번역하기</button>
+          <button id="logout" class="ghost" style="margin-left:auto;font-size:13px;padding:8px 12px">로그아웃</button>
+        </div>
+      </div>
+
+      <pre id="log"></pre>
+      <div id="result" class="card"></div>
+
+      <div class="foot">
+        업로드한 파일과 번역 결과는 서버에서만 처리되며 <b>약 24시간 후 자동 삭제</b>됩니다(외부 전송·영구 저장·공유 없음). 번역 정확성은 보장되지 않습니다.<br />
+        원문 저작권은 원저작자에게 있으며, 번역·이용에 따른 책임은 이용자에게 있습니다. · <a href="#" id="termsLink2" style="color:#6b7280;text-decoration:underline">이용약관·개인정보</a> · <a href="https://github.com/fakeminjun7321/pdf-translate" target="_blank" rel="noopener" style="color:#6b7280;text-decoration:underline">GitHub</a>
+      </div>
+    </div>
+
+    <!-- 이용약관·개인정보 모달 -->
+    <div id="terms" style="display:none;position:fixed;inset:0;background:#0007;z-index:20;align-items:center;justify-content:center;padding:18px">
+      <div style="background:#fff;border-radius:14px;max-width:560px;width:100%;max-height:84vh;overflow:auto;padding:22px 24px;font-size:13px;line-height:1.7;color:#2a3145">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <b style="font-size:15px">이용약관 · 개인정보 안내</b>
+          <button id="termsClose" class="ghost" style="padding:4px 10px">닫기</button>
+        </div>
+        <p><b>1. 목적·용도.</b> 본 도구는 PDF 문서를 한국어로 번역하는 개인·학습용 도구입니다. 상업적 재배포를 위한 서비스가 아닙니다.</p>
+        <p><b>2. 저작권·이용자 책임.</b> 업로드하는 문서의 저작권은 원저작자에게 있습니다. 이용자는 해당 문서를 번역·복제할 적법한 권리(본인 저작물, 권리자 허락, 또는 저작권법상 허용되는 사적 이용·교육 목적 등)가 있는 경우에만 사용해야 합니다. 권리 없는 저작물의 업로드·번역·배포로 인한 모든 법적 책임은 이용자 본인에게 있으며, 운영자는 이에 대해 책임지지 않습니다.</p>
+        <p><b>3. 개인정보·파일 처리.</b> 업로드한 PDF와 번역 결과는 번역 처리를 위해서만 서버에서 일시적으로 사용되며, 약 24시간 후 자동 삭제됩니다. 운영자는 파일 내용을 영구 저장·외부 전송·제3자 공유하지 않습니다(단, 번역 엔진 처리를 위해 번역 AI 제공사로 텍스트가 전송됩니다).</p>
+        <p><b>4. 무보증·면책.</b> 번역 결과의 정확성·완전성·적합성을 보장하지 않습니다. 본 도구 이용으로 발생한 직접·간접 손해에 대해 운영자는 책임지지 않습니다.</p>
+        <p><b>5. 금지.</b> 불법 콘텐츠, 타인의 권리를 침해하는 자료, 법령에 반하는 용도로의 사용을 금합니다.</p>
+        <p style="color:#6b7280;font-size:12px;margin-top:12px">본 안내는 일반적 고지이며 법률 자문이 아닙니다. 구체적 사안은 전문가 검토가 필요할 수 있습니다.</p>
+      </div>
+    </div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      let picked = null, es = null;
+
+      async function init() {
+        try {
+          const me = await fetch("/api/me").then((r) => r.json());
+          if (me.authed) { $("app").style.display = "block"; }
+          else { $("gate").style.display = "grid"; $("code").focus(); }
+        } catch { $("gate").style.display = "grid"; }
+      }
+      async function login() {
+        const code = $("code").value.trim();
+        $("gateErr").textContent = "";
+        try {
+          const r = await fetch("/api/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
+          if (r.ok) location.reload();
+          else $("gateErr").textContent = (await r.json()).error || "코드가 올바르지 않습니다.";
+        } catch { $("gateErr").textContent = "오류가 발생했습니다."; }
+      }
+      $("gateBtn").onclick = login;
+      $("code").addEventListener("keydown", (e) => { if (e.key === "Enter") login(); });
+      $("logout").onclick = async () => { await fetch("/api/logout", { method: "POST" }); location.reload(); };
+
+      // 파일 선택
+      const drop = $("drop");
+      drop.onclick = () => $("file").click();
+      drop.ondragover = (e) => { e.preventDefault(); drop.classList.add("over"); };
+      drop.ondragleave = () => drop.classList.remove("over");
+      drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove("over"); if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]); };
+      $("file").onchange = (e) => { if (e.target.files[0]) setFile(e.target.files[0]); };
+      $("mode").onchange = $("model").onchange = () => { if (picked) estimate(); };
+
+      function setFile(f) {
+        if (!/\.pdf$/i.test(f.name) && f.type !== "application/pdf") { alert("PDF 파일만 가능합니다."); return; }
+        picked = f;
+        drop.innerHTML = `<b>${f.name}</b> · ${(f.size / 1024 / 1024).toFixed(1)}MB <span style="color:#3b5bdb">(다른 파일 선택)</span>`;
+        updateGo();
+        estimate();
+      }
+
+      // 번역 버튼은 파일 선택 + 약관 동의 둘 다 돼야 활성화(저작권 책임 동의 필수).
+      function updateGo() { $("go").disabled = !(picked && $("agree").checked); }
+      $("agree").checked = localStorage.getItem("tr_agree") === "1";
+      $("agree").addEventListener("change", () => {
+        localStorage.setItem("tr_agree", $("agree").checked ? "1" : "0");
+        updateGo();
+      });
+      // 이용약관 모달
+      const openTerms = (e) => { if (e) e.preventDefault(); $("terms").style.display = "flex"; };
+      $("termsLink").onclick = openTerms;
+      $("termsLink2").onclick = openTerms;
+      $("termsClose").onclick = () => ($("terms").style.display = "none");
+      $("terms").onclick = (e) => { if (e.target === $("terms")) $("terms").style.display = "none"; };
+      async function estimate() {
+        $("est").innerHTML = `<span class="spin"></span> 분석 중…`;
+        try {
+          const fd = new FormData();
+          fd.append("pdf", picked); fd.append("mode", $("mode").value); fd.append("model", $("model").value);
+          const r = await fetch("/api/translate-pdf/estimate", { method: "POST", body: fd });
+          if (!r.ok) { $("est").textContent = ""; return; }
+          const e = await r.json();
+          const m = e.mode === "retypeset" ? (e.scanned ? "스캔 OCR 재조판" : "재조판") : "빠른 번역";
+          let s = `<b>${e.pages}쪽</b> · 처리방식 <b>${m}</b> · 예상 ${Math.round(e.seconds.lo)}~${Math.round(e.seconds.hi)}초`;
+          if (e.tooManyPages) s += ` <span class="warn">· ${e.maxPages}쪽 초과 — 텍스트 PDF 상한</span>`;
+          if (e.truncated) s += ` <span class="warn">· 분량 많아 앞부분 위주</span>`;
+          $("est").innerHTML = s;
+        } catch { $("est").textContent = ""; }
+      }
+
+      $("go").onclick = async () => {
+        if (!picked) return;
+        $("go").disabled = true;
+        $("result").style.display = "none";
+        $("log").style.display = "block"; $("log").textContent = "";
+        const fd = new FormData();
+        fd.append("pdf", picked); fd.append("mode", $("mode").value); fd.append("model", $("model").value);
+        let jobId;
+        try {
+          const r = await fetch("/api/translate-pdf", { method: "POST", body: fd });
+          const j = await r.json();
+          if (!r.ok) throw new Error(j.error || "시작 실패");
+          jobId = j.jobId;
+        } catch (e) { append("오류: " + e.message); $("go").disabled = false; return; }
+
+        if (es) es.close();
+        es = new EventSource(`/api/jobs/${jobId}/stream`);
+        es.addEventListener("progress", (e) => append(JSON.parse(e.data)));
+        es.addEventListener("done", (e) => {
+          const d = JSON.parse(e.data);
+          es.close();
+          $("result").style.display = "block";
+          $("result").innerHTML = `<div style="margin-bottom:10px">✅ 번역 완료</div><a class="dl" href="/api/jobs/${jobId}/download">${d.filename} 다운로드</a>`;
+          $("go").disabled = false;
+        });
+        es.addEventListener("error", (e) => {
+          append("오류: " + (e.data ? JSON.parse(e.data) : "연결이 끊겼습니다. 잠시 후 다시 시도하세요."));
+          try { es.close(); } catch {}
+          $("go").disabled = false;
+        });
+      };
+
+      function append(line) { const el = $("log"); el.textContent += (el.textContent ? "\n" : "") + line; el.scrollTop = el.scrollHeight; }
+      init();
+    </script>
+  </body>
+</html>

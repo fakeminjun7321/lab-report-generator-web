@@ -102,7 +102,7 @@ HWPX 출력은 Python 의존성이 필요하다. `package.json`의 `postinstall`
 | `studentName` | text | 선택 | 사전보고서 표지/헤더용 이름 |
 | `temperature` | text | 선택 | 실험 온도. 사전보고서는 보통 비어 있음 |
 | `pressure` | text | 선택 | 기압. 사전보고서는 보통 비어 있음 |
-| `model` | text | 선택 | 현재 서버 whitelist상 `claude-opus-4-8`만 허용 |
+| `model` | text | 선택 | 서버 whitelist: `claude-opus-4-8`(기본)·`claude-sonnet-4-6`·GPT(`gpt-5.5`/`gpt-5.4`/`gpt-5.4-mini`) |
 | `format` | text | 선택 | `docx` 또는 `hwpx` |
 | `style` | text | 선택 | `default` 또는 `minimal` |
 | `fontFace` | text | 선택 | 출력 글꼴 |
@@ -155,7 +155,7 @@ HWPX 출력은 Python 의존성이 필요하다. `package.json`의 `postinstall`
 - `manual.mimetype !== "application/pdf"`이면 reject
 - `style`은 `minimal`일 때만 minimal, 그 외는 default
 - `fontFace`는 `normalizeFontFace()`로 정규화
-- `userNotes`는 `normalizeUserNotes()`로 줄바꿈 정리 후 최대 2000자
+- `userNotes`는 `collectUserNotes()`→`normalizeUserNotes()`로 줄바꿈 정리 후 최대 `MAX_USER_NOTES_CHARS`자(기본 12000). `.md`/`.txt` 메모 파일(`userNotesFile`/`notesFile`, 최대 256KB)도 합쳐진다.
 
 ## 8. Job과 진행 로그
 
@@ -554,9 +554,9 @@ default 구성:
 - `buildTheory(content.theory, content.figures_needed)`
 - `buildApparatusAndChemicals(content)`
 - `buildProcedure(content.procedure)`
-- `buildDataSection(content.data_table)`
 - `buildReferences(content)`
-- `buildFooter()`
+
+> 참고: `data_table`은 스키마로 받지만 DOCX/HWPX 어느 출력에도 렌더하지 않는다(향후 엑셀 추출용으로만 보관). 바닥글(footer)도 사용자 요청으로 제거되어 출력하지 않는다.
 
 minimal 구성:
 

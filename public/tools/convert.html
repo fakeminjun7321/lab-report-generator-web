@@ -120,6 +120,14 @@
           <p>표·이미지·PDF·수식을 한 곳에서 변환합니다. 파일·이미지·PDF는 브라우저 안에서, 수식 변환은 우리 서버에서 처리합니다.</p>
         </div>
 
+        <div class="quick-jump" id="convertShortcuts" aria-label="자주 쓰는 변환">
+          <button type="button" data-jump-tab="file" data-jump-mode="table">표 변환</button>
+          <button type="button" data-jump-tab="file" data-jump-mode="img2pdf">이미지 → PDF</button>
+          <button type="button" data-jump-tab="image">이미지 압축</button>
+          <button type="button" data-jump-tab="pdf">PDF 병합·분할</button>
+          <button type="button" data-jump-tab="equation">LaTeX → 한글 수식</button>
+        </div>
+
         <div class="conv-tabs" id="convTabs" role="tablist">
           <button class="on" type="button" data-tab="file">파일 · 표 변환</button>
           <button type="button" data-tab="image">이미지 변환 · 압축</button>
@@ -298,6 +306,15 @@
             if (frame && !frame.src && frame.dataset.src)
               frame.src = frame.dataset.src;
           });
+        });
+        document.getElementById("convertShortcuts")?.addEventListener("click", (e) => {
+          const btn = e.target.closest("button[data-jump-tab]");
+          if (!btn) return;
+          document.querySelector(`#convTabs button[data-tab="${btn.dataset.jumpTab}"]`)?.click();
+          if (btn.dataset.jumpMode) {
+            document.querySelector(`#modeTabs button[data-m="${btn.dataset.jumpMode}"]`)?.click();
+          }
+          document.querySelector(".conv-panel.on")?.scrollIntoView({ behavior: "smooth", block: "start" });
         });
       })();
     </script>

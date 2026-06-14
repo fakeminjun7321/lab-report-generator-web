@@ -89,6 +89,13 @@
           <p>AI 참고 메모를 어떻게 쓰면 좋은지, 그리고 실제로 어떤 보고서가 나오는지 모았습니다. 생성물은 <b>초안</b>이니 반드시 직접 검토·수정해서 사용하세요.</p>
         </div>
 
+        <nav class="quick-jump" aria-label="예시 바로가기">
+          <a href="#notes">AI 참고 메모</a>
+          <a href="#samples">보고서 예시</a>
+          <a href="/examples/ai-notes-example.md" download>메모 예시 받기</a>
+          <a href="/">보고서 만들기</a>
+        </nav>
+
         <div class="legal-page" style="padding:0;max-width:none">
           <section id="notes">
             <h2>1. AI 참고 메모 작성 가이드</h2>
@@ -211,13 +218,18 @@
     </footer>
 
     <script>
-      // 보고서 예시: /examples/samples/ 에 규칙대로 된 파일이 있으면
-      // "예시 파일 준비 중" 뱃지를 다운로드 버튼으로 자동 전환한다. (파일명 규칙은 samples/README.md)
+      // 보고서 예시 파일을 공개할 때 여기에 확장자를 추가하면 다운로드 버튼이 표시된다.
+      // 없는 파일을 HEAD로 탐색하면 브라우저 콘솔에 404가 남아 기본값은 비워둔다.
       (function () {
         var NAMES = {
           "chem-pre": "화학사전보고서_예시",
           "chem-result": "화학결과보고서_예시",
           "phys-result": "물리결과보고서_예시",
+        };
+        var AVAILABLE = {
+          "chem-pre": [],
+          "chem-result": [],
+          "phys-result": [],
         };
         var FORMATS = [
           { ext: "docx", label: "DOCX" },
@@ -226,30 +238,26 @@
         document.querySelectorAll("[data-sample]").forEach(function (badge) {
           var key = badge.getAttribute("data-sample");
           var foot = badge.parentNode;
-          Promise.all(
-            FORMATS.map(function (f) {
-              var url = "/examples/samples/" + key + "." + f.ext;
-              return fetch(url, { method: "HEAD" })
-                .then(function (res) { return res.ok ? { url: url, label: f.label, ext: f.ext } : null; })
-                .catch(function () { return null; });
+          var available = AVAILABLE[key] || [];
+          var found = FORMATS
+            .filter(function (f) { return available.indexOf(f.ext) >= 0; })
+            .map(function (f) {
+              return { url: "/examples/samples/" + key + "." + f.ext, label: f.label, ext: f.ext };
+            });
+          if (!found.length) return; // 파일 없으면 "준비 중" 뱃지 유지
+          var dlName = NAMES[key] || key;
+          foot.innerHTML = found
+            .map(function (f) {
+              return (
+                '<a class="btn' + (f.ext === "docx" ? " btn-primary" : "") +
+                '" href="' + f.url + '" download="' + dlName + "." + f.ext +
+                '">⬇ ' + f.label + "</a>"
+              );
             })
-          ).then(function (results) {
-            var found = results.filter(Boolean);
-            if (!found.length) return; // 파일 없으면 "준비 중" 뱃지 유지
-            var dlName = NAMES[key] || key;
-            foot.innerHTML = found
-              .map(function (f) {
-                return (
-                  '<a class="btn' + (f.ext === "docx" ? " btn-primary" : "") +
-                  '" href="' + f.url + '" download="' + dlName + "." + f.ext +
-                  '">⬇ ' + f.label + "</a>"
-                );
-              })
-              .join("");
-            foot.style.display = "flex";
-            foot.style.flexWrap = "wrap";
-            foot.style.gap = "8px";
-          });
+            .join("");
+          foot.style.display = "flex";
+          foot.style.flexWrap = "wrap";
+          foot.style.gap = "8px";
         });
       })();
     </script>

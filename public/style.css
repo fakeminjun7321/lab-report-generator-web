@@ -394,6 +394,11 @@ body > details,
   display: none !important;
 }
 
+body[data-auth="in"] #loginDd,
+body[data-auth="out"] #acctDd {
+  display: none !important;
+}
+
 /* ============================================================ report toolbar / type cards */
 .report-toolbar {
   display: grid;
@@ -405,6 +410,10 @@ body > details,
 
 .report-toolbar.has-balance {
   grid-template-columns: minmax(240px, 0.7fr) minmax(0, 1.3fr);
+}
+
+.report-toolbar.has-balance #reportTypeFieldset {
+  grid-column: 1 / -1;
 }
 
 .balance-box {
@@ -438,6 +447,91 @@ body > details,
   font-size: 13px;
 }
 
+.workspace-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(210px, 0.85fr);
+  gap: 12px;
+  padding: 15px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.workspace-summary[hidden] {
+  display: none !important;
+}
+
+.workspace-kicker {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--text-faint);
+  font-size: 11.5px;
+  font-weight: 780;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.workspace-summary strong {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text);
+  font-size: 15px;
+}
+
+.workspace-summary ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.workspace-summary li {
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: 650;
+}
+
+.workspace-files {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+}
+
+.is-authenticated #reportsPanel {
+  display: flex;
+  flex-direction: column;
+}
+
+.is-authenticated #reportTypes {
+  order: -2;
+}
+
+.is-authenticated .home-hero {
+  order: -1;
+}
+
+.link-button {
+  width: fit-content;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent-text);
+  font: inherit;
+  font-weight: 760;
+  cursor: pointer;
+}
+
+.link-button:hover {
+  text-decoration: underline;
+}
+
 /* 보고서 종류 선택 — 카드 그리드 */
 #reportTypeFieldset {
   display: grid;
@@ -463,6 +557,9 @@ body > details,
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
+
+/* hidden 속성이 label{display:flex} 에 가려지지 않도록(베타 탭 게이트) */
+#reportTypeFieldset label[hidden]{display:none !important;}
 
 #reportTypeFieldset label {
   position: relative;
@@ -604,6 +701,11 @@ form label textarea {
   align-items: start;
 }
 
+.report-form.active.report-flow {
+  grid-template-columns: minmax(0, 1.15fr) minmax(300px, 0.85fr);
+  gap: 14px;
+}
+
 .report-form[hidden] {
   display: none !important;
 }
@@ -630,6 +732,85 @@ form label textarea {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-muted);
+}
+
+.form-flow-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.report-flow > .form-flow-steps {
+  grid-column: 1 / -1;
+}
+
+.form-flow-steps button {
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: 760;
+  text-align: center;
+  cursor: pointer;
+}
+
+.form-flow-steps button:hover {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.report-flow > .optional-settings,
+.report-flow > .form-actions,
+.report-flow > .policy-check {
+  grid-column: 1 / -1;
+}
+
+.report-flow > .form-section[data-flow-target="upload"],
+.report-flow > .form-section[data-flow-target="info"] {
+  min-height: 100%;
+}
+
+.report-flow > .form-actions {
+  justify-content: space-between;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.optional-settings {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.optional-settings > summary {
+  cursor: pointer;
+  padding: 14px 16px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 800;
+  user-select: none;
+}
+
+.optional-settings-body {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding: 0 14px 14px;
+}
+
+.optional-settings-body .form-section {
+  background: var(--surface-2);
+}
+
+.optional-settings-body .generated-note-section,
+.optional-settings-body .form-section:has(textarea[id$="UserNotes"]) {
+  grid-column: 1 / -1;
 }
 
 .form-section-note {
@@ -1024,6 +1205,91 @@ html[data-theme="dark"] .theme-toggle .theme-icon-light {
   gap: 10px;
 }
 
+.progress-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.progress-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: 760;
+}
+
+.progress-step span {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.progress-step b {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.progress-step.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.progress-step.is-active span {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.progress-step.is-done {
+  border-color: rgba(22, 163, 74, 0.36);
+  background: rgba(22, 163, 74, 0.08);
+  color: var(--success);
+}
+
+.progress-step.is-done span {
+  background: var(--success);
+  color: #fff;
+}
+
+.progress-step.is-error {
+  border-color: rgba(220, 38, 38, 0.36);
+  background: rgba(220, 38, 38, 0.08);
+  color: var(--danger);
+}
+
+.progress-step.is-error span {
+  background: var(--danger);
+  color: #fff;
+}
+
+.progress-details {
+  margin-top: 8px;
+}
+
+.progress-details summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .spinner {
   display: inline-block;
   width: 18px;
@@ -1045,7 +1311,7 @@ html[data-theme="dark"] .theme-toggle .theme-icon-light {
 .console {
   max-height: 360px;
   overflow: auto;
-  margin: 12px 0 0;
+  margin: 10px 0 0;
   padding: 16px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -1086,7 +1352,113 @@ html[data-theme="dark"] .theme-toggle .theme-icon-light {
   text-decoration: none;
 }
 
+@media (max-width: 760px) {
+  .workspace-summary,
+  .report-toolbar.has-balance {
+    grid-template-columns: 1fr;
+  }
+
+  .report-form.active.report-flow,
+  .optional-settings-body {
+    grid-template-columns: 1fr;
+  }
+
+  #filesPanel.active,
+  #settingsPanel.active {
+    grid-template-columns: 1fr;
+  }
+
+  .is-authenticated .home-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .is-authenticated .home-hero-cta {
+    justify-content: flex-start;
+  }
+
+  .form-flow-steps,
+  .progress-steps {
+    grid-template-columns: 1fr;
+  }
+
+  .progress-step b {
+    white-space: normal;
+  }
+}
+
+#filesPanel.active {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.7fr) minmax(0, 1.3fr);
+  gap: 16px;
+  align-items: start;
+}
+
+#filesPanel.active .settings-card,
+#settingsPanel.active .settings-card {
+  margin: 0;
+}
+
+#filesPanel.active .settings-card + .settings-card,
+#settingsPanel.active .settings-card + .settings-card {
+  margin-top: 0;
+}
+
+#settingsPanel.active {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.settings-shortcuts {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 0 2px;
+}
+
+.settings-shortcuts a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 760;
+  text-decoration: none;
+}
+
+.settings-shortcuts a:hover {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+#settingsStyleCard,
+#settingsDefaultsCard {
+  min-height: 100%;
+}
+
 /* ============================================================ files list */
+.file-filter {
+  display: grid;
+  gap: 6px;
+  max-width: 360px;
+  margin: 2px 0 4px;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: 760;
+}
+
+.file-filter input {
+  width: 100%;
+  margin: 0;
+}
+
 .file-list {
   display: grid;
   gap: 10px;
@@ -2175,6 +2547,38 @@ a.feature-card:hover {
   line-height: 1.6;
 }
 
+.quick-jump {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 18px 0 24px;
+}
+
+.quick-jump a,
+.quick-jump button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 8px 13px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 760;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.quick-jump a:hover,
+.quick-jump button:hover {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  text-decoration: none;
+}
+
 .tool-card {
   display: grid;
   gap: 16px;
@@ -2398,6 +2802,10 @@ textarea.tool-input {
   align-items: center;
   gap: 6px;
 }
+/* hidden 속성이 .nav-dd-btn 의 display:inline-flex 에 덮이지 않도록(베타 메뉴 가림 보장) */
+.nav-dd-btn[hidden] {
+  display: none !important;
+}
 .nav-dd-btn:hover,
 .nav-dd.open .nav-dd-btn {
   background: var(--surface-2);
@@ -2564,6 +2972,42 @@ textarea.tool-input {
   color: var(--success);
   font-weight: 800;
 }
+
+.is-authenticated .home-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 18px;
+  align-items: end;
+  text-align: left;
+  padding: 20px 0 14px;
+  margin-bottom: 8px;
+  border-radius: 0;
+  background: transparent;
+}
+
+.is-authenticated .home-hero .eyebrow {
+  grid-column: 1 / -1;
+}
+
+.is-authenticated .home-hero h1 {
+  margin: 4px 0 0;
+  font-size: clamp(24px, 3vw, 34px);
+  letter-spacing: 0;
+}
+
+.is-authenticated .home-hero-sub,
+.is-authenticated .home-hero-points {
+  display: none;
+}
+
+.is-authenticated .home-hero-cta {
+  margin-top: 0;
+  justify-content: flex-end;
+}
+
+.is-authenticated .home-hero-cta .btn-outline {
+  display: none;
+}
 /* 드롭다운은 클릭으로만 연다(호버 자동 열림 없음) — SNU식, 의도치 않은 열림 방지 */
 @media (max-width: 760px) {
   .topnav-burger {
@@ -2602,3 +3046,23 @@ textarea.tool-input {
     margin: 6px;
   }
 }
+
+
+/* ── 상단 공지 티커(마퀴) ── */
+.ann-ticker{display:flex;align-items:center;gap:10px;background:linear-gradient(90deg,#eef2ff,#f5f3ff);border-bottom:1px solid #e2e6f3;padding:7px 14px;overflow:hidden;position:relative}
+.ann-ticker[hidden]{display:none}
+.ann-ticker .ann-bell{flex:0 0 auto;font-size:14px;line-height:1}
+.ann-track{display:flex;align-items:center;white-space:nowrap;animation:ann-scroll var(--ann-dur,40s) linear infinite;will-change:transform}
+.ann-ticker:hover .ann-track{animation-play-state:paused}
+.ann-item{display:inline-flex;align-items:center;gap:7px;padding:0 18px;font-size:13px;color:#334155;text-decoration:none}
+.ann-item:hover{color:#2950e6}
+.ann-item .ann-cat{font-size:11px;font-weight:700;color:#2950e6;background:#fff;border:1px solid #dfe4fb;border-radius:999px;padding:1px 8px}
+.ann-dot{color:#c7cce0;font-size:12px}
+@keyframes ann-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@media (prefers-reduced-motion: reduce){.ann-track{animation:none}}
+[data-theme="dark"] .ann-ticker{background:linear-gradient(90deg,#1c2233,#241f33);border-color:#2b3350}
+[data-theme="dark"] .ann-item{color:#cbd5e1}
+[data-theme="dark"] .ann-item .ann-cat{background:#161b2b;color:#93a5ff;border-color:#2b3350}
+
+/* hidden 속성이 label{display:inline-flex} 에 가려지지 않도록 (관리자 전용 모델 게이트) */
+.segmented label[hidden]{display:none !important;}

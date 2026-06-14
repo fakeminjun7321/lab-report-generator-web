@@ -222,7 +222,7 @@ const PIPELINES = {
         }
       };
       checkRefExt(refs, "참고자료");
-      checkRefExt(styleRefs, "스타일 참고 자료");
+      styleRef.validateStyleRefs(styleRefs); // 스타일 참고는 .hwpx 허용(.hwp 거부)
       if (notes.length === 0 && refs.length === 0 && !refLinks) {
         throw new Error(
           "필기노트 PDF, 참고자료 파일, 참고 링크 중 하나는 첨부하세요.",
@@ -260,10 +260,114 @@ const PIPELINES = {
     generateDocx: require("./lib/pipelines/phys-inquiry/docx-gen").generateDocx,
     generateHwpx: require("./lib/pipelines/phys-inquiry/hwpx-gen").generateHwpx,
   },
+  // 수학 수행평가 — 수학Ⅲ 급수 탐구보고서 (베타)
+  // 입력: 주제 + (선택) 메모·내 글 스타일만. 필기노트·참고자료 업로드는 받지 않는다 —
+  // 수학 내용은 모델이 직접 구성하고 선행연구는 web_search 로 확인. FREE_BETA_TYPES 로 무료·테스터 한정.
+  "math-inquiry": {
+    label: "수학 수행평가",
+    filenamePrefix: "수학수행",
+    creditField: "result",
+    prepareInput(filesByField, body) {
+      const topic = String(body.topic || "").trim();
+      if (!topic) {
+        throw new Error("탐구 주제를 입력하세요.");
+      }
+      const styleRefs = filesByField.styleRefs || [];
+      styleRef.validateStyleRefs(styleRefs); // 스타일 참고는 .hwpx 허용(.hwp 거부)
+      const mapFiles = (arr) =>
+        arr.map((f) => ({
+          buffer: f.buffer,
+          name: f.originalname,
+          mimetype: f.mimetype,
+        }));
+      return {
+        topic,
+        styleRefs: mapFiles(styleRefs),
+        styleNote: String(body.styleNote || "").trim().slice(0, 1500),
+        studentId: String(body.studentId || "").trim().slice(0, 20),
+        fontFace: normalizeFontFace(body.fontFace),
+        userNotes: collectUserNotes(body.userNotes, filesByField),
+        style: "default",
+      };
+    },
+    buildFilename(content, ctx) {
+      const id = sanitizeForFilename(ctx.studentId || "");
+      const name = sanitizeForFilename(ctx.userName || "");
+      const prefix = `${id}${name ? "_" + name : ""}`;
+      return prefix
+        ? `${prefix}_급수탐구보고서.docx`
+        : `수학수행_급수탐구보고서.docx`;
+    },
+    generateContent: require("./lib/pipelines/math-inquiry/generate")
+      .generateReportContent,
+    generateDocx: require("./lib/pipelines/math-inquiry/docx-gen").generateDocx,
+    generateHwpx: require("./lib/pipelines/math-inquiry/hwpx-gen").generateHwpx,
+  },
+  // 자유 보고서 — 임의 주제. 작성 지시 + (선택) 평가 기준 + 자료 파일/사진을 주면
+  // 기존 보고서처럼 표·수식·그래프·사진을 갖춘 .docx/.hwpx 초안을 만든다.
+  // 공개 + 크레딧 차감(일반 보고서와 동일). Claude/GPT 모두 허용.
+  "free": {
+    label: "자유 보고서",
+    filenamePrefix: "보고서",
+    filenameSourceField: "files",
+    creditField: "result",
+    prepareInput(filesByField, body) {
+      const instructions = String(body.instructions || "").trim();
+      if (!instructions) {
+        throw new Error("어떤 보고서를 어떻게 쓸지 '작성 지시'를 입력하세요.");
+      }
+      const files = filesByField.files || [];
+      const photos = filesByField.photos || [];
+      const SOURCE_EXT = ["pdf", "xlsx", "xls", "csv", "txt", "md", "tsv", "png", "jpg", "jpeg", "gif", "webp"];
+      for (const f of files) {
+        const ext = (f.originalname.split(".").pop() || "").toLowerCase();
+        if (!SOURCE_EXT.includes(ext)) {
+          throw new Error(
+            `자료 파일은 PDF, 엑셀/CSV(.xlsx/.xls/.csv), 텍스트(.txt/.md), 이미지(.png/.jpg)만 가능합니다. (${f.originalname})`,
+          );
+        }
+      }
+      for (const f of photos) {
+        const ext = (f.originalname.split(".").pop() || "").toLowerCase();
+        if (!["png", "jpg", "jpeg", "gif", "webp"].includes(ext)) {
+          throw new Error(`사진은 이미지 파일(.png/.jpg/.gif/.webp)만 가능합니다. (${f.originalname})`);
+        }
+      }
+      const styleInput = styleRef.readStyleInput(filesByField, body);
+      styleRef.validateStyleRefs(styleInput.styleRefs);
+      const mapFiles = (arr) =>
+        arr.map((f) => ({ buffer: f.buffer, name: f.originalname, mimetype: f.mimetype }));
+      return {
+        ...styleInput,
+        title: String(body.title || "").trim().slice(0, 200),
+        instructions: instructions.slice(0, 8000),
+        gradingCriteria: String(body.gradingCriteria || "").trim().slice(0, 8000),
+        files: mapFiles(files),
+        photos: mapFiles(photos),
+        refLinks: String(body.refLinks || "").trim().slice(0, 4000),
+        studentId: String(body.studentId || "").trim().slice(0, 20),
+        studentName: String(body.studentName || "").trim(),
+        fontFace: normalizeFontFace(body.fontFace),
+        userNotes: collectUserNotes(body.userNotes, filesByField),
+        style: "default",
+      };
+    },
+    buildFilename(content, ctx) {
+      const id = sanitizeForFilename(ctx.studentId || "");
+      const name = sanitizeForFilename(ctx.userName || "");
+      const title = sanitizeForFilename(content.title || "자유보고서");
+      const prefix = `${id}${name}`;
+      return prefix ? `${prefix}_${title}.docx` : `자유보고서_${title}.docx`;
+    },
+    generateContent: require("./lib/pipelines/free-report/generate")
+      .generateReportContent,
+    generateDocx: require("./lib/pipelines/free-report/docx-gen").generateDocx,
+    generateHwpx: require("./lib/pipelines/free-report/hwpx-gen").generateHwpx,
+  },
 };
 
 // 베타·무료 보고서 종류 — /api/generate 에서 테스터 한정 접근 + 크레딧 미차감.
-const FREE_BETA_TYPES = new Set(["phys-inquiry"]);
+const FREE_BETA_TYPES = new Set(["phys-inquiry", "math-inquiry"]);
 const pricing = require("./lib/pricing");
 const {
   fmtUSD,
@@ -308,18 +412,43 @@ const JOB_TIMEOUT_MS = parseInt(
   process.env.JOB_TIMEOUT_MS || String(8 * 60 * 1000),
   10,
 );
+// Fable 5는 최상위 대형 모델이라 토큰 생성이 훨씬 느리다(긴 보고서 = 10~20분+).
+// Fable 작업은 별도의 넉넉한 타임아웃을 쓴다.
+const JOB_TIMEOUT_FABLE_MS = parseInt(
+  // Fable은 적응형 추론이 길어 25분으로도 시간초과가 났음(수행평가 보고서) → 45분.
+  process.env.JOB_TIMEOUT_FABLE_MS || String(45 * 60 * 1000),
+  10,
+);
+function jobTimeoutForModel(model) {
+  return /^claude-fable/.test(String(model || ""))
+    ? JOB_TIMEOUT_FABLE_MS
+    : JOB_TIMEOUT_MS;
+}
+// Fable 5 일시 차단 — 외부 사용 이슈로 관리자 포함 전체 차단(한시적).
+// 재개하려면 환경변수 FABLE_DISABLED=0 으로 설정(또는 이 기본값을 false 로).
+const FABLE_DISABLED = process.env.FABLE_DISABLED !== "0";
+function isFableModel(model) {
+  return /^claude-fable/.test(String(model || ""));
+}
 // PDF 통번역은 페이지 수에 비례해 오래 걸릴 수 있어(다묶음 번역+레이아웃 삽입)
 // 별도의 넉넉한 타임아웃을 둔다. 비동기 job+SSE라 HTTP 요청 길이 제한과 무관.
 const PDF_TRANSLATE_TIMEOUT_MS = parseInt(
   process.env.PDF_TRANSLATE_TIMEOUT_MS || String(20 * 60 * 1000),
   10,
 );
+const PDF_TRANSLATE_FABLE_TIMEOUT_MS = parseInt(
+  process.env.PDF_TRANSLATE_FABLE_TIMEOUT_MS || String(35 * 60 * 1000),
+  10,
+);
 
 // ── Middleware ───────────────────────────────────────────────────────────────
 
 app.set("trust proxy", 1);
+// 창작(artifacts)은 생성·업로드 이미지(데이터 URL)나 임베드 미디어로 본문이 커질 수
+// 있어 별도로 상향(8MB). 전역 파서보다 먼저 매칭돼 해당 경로만 큰 본문을 허용한다.
+app.use("/api/artifacts", express.json({ limit: "8mb" }));
 // JSON/URL-encoded body는 비번 변경 등 작은 요청만 — 1MB로 충분
-// (파일 업로드는 multer가 별도로 25MB 한도 처리)
+// (파일 업로드는 multer가 별도로 처리: MAX_UPLOAD_BYTES, 아래 참조)
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 app.use(
@@ -410,16 +539,42 @@ app.use((req, res, next) => {
 </html>`);
 });
 
-// 단일 파일 25MB, 전체 파일 개수 50개 (물리 다중 데이터/사진/메모 파일 대비)
-// — Render 무료 512MB 메모리 보호. Claude 전송 전 이미지는 별도 request-budget으로 축소한다.
+// 단일 파일 MAX_UPLOAD_BYTES(기본 64MB), 전체 파일 개수 50개 (물리 다중 데이터/사진/메모 파일 대비)
+// — Render 메모리 보호. Claude 전송 전 이미지는 별도 request-budget으로 축소하고,
+//   큰 PDF 는 Files API 로 업로드해 Anthropic 32MB 요청 한도를 우회한다.
+// 단일 파일 업로드 상한. 큰 필기노트 PDF 도 받을 수 있게 64MB(환경변수로 조정 가능).
+// 물리 수행평가는 큰 PDF 를 Files API 로 업로드해 Anthropic 32MB 요청 한도를 우회한다.
+const MAX_UPLOAD_BYTES =
+  parseInt(process.env.MAX_UPLOAD_MB || "64", 10) * 1024 * 1024;
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 25 * 1024 * 1024,
+    fileSize: MAX_UPLOAD_BYTES,
     files: 50,
     parts: 90,
   },
 });
+
+// 한 요청 누적 업로드 상한(Render 메모리 보호). multer 의 per-file 64MB·files:50 는
+// 그대로 두되(정상 다중 사진/데이터 입력 보존), memoryStorage 특성상 한 요청이
+// 최대 ~3GB(64MB×50)까지 RAM 에 버퍼링되는 DoS 를 막는다. Content-Length 헤더로
+// 본문을 버퍼링하기 전에 가볍게 거부한다(헤더가 없으면 통과 — 스트리밍 호환).
+const MAX_TOTAL_UPLOAD_BYTES =
+  parseInt(process.env.MAX_TOTAL_UPLOAD_MB || "192", 10) * 1024 * 1024;
+function limitTotalUpload(req, res, next) {
+  const raw = req.headers["content-length"];
+  if (raw != null && raw !== "") {
+    const len = Number(raw);
+    if (Number.isFinite(len) && len > MAX_TOTAL_UPLOAD_BYTES) {
+      return res.status(413).json({
+        error: `파일이 너무 큽니다 (업로드 합계 최대 ${Math.round(
+          MAX_TOTAL_UPLOAD_BYTES / 1024 / 1024,
+        )}MB). 파일 수를 줄이거나 여러 번 나눠 생성해보세요.`,
+      });
+    }
+  }
+  next();
+}
 
 // ── Auth helpers ─────────────────────────────────────────────────────────────
 
@@ -820,6 +975,7 @@ app.get("/api/me", async (req, res) => {
     studentId,
     styleNote,
     blockedReportTypes,
+    fableDisabled: FABLE_DISABLED,
   });
 });
 
@@ -861,18 +1017,53 @@ const CHAT_MEMO_MAX_TOKENS = parseInt(
   process.env.CHAT_MEMO_MAX_TOKENS || "1200",
   10,
 );
-const CHAT_MEMO_SYSTEM = `당신은 "Quilo"의 '실험 메모 작성 도우미'입니다. 사용자가 실험 보고서 생성에 넣을 'AI 참고 메모(실험자 의견)' 초안을 함께 만듭니다.
+const CHAT_MEMO_SYSTEM = `당신은 "Quilo"의 'AI 참고 메모 작성 도우미'입니다. 사용자가 보고서 생성 시스템에 넣을 'AI 참고 메모'를 함께 만듭니다.
+
+[Quilo 보고서 생성 시스템이 어떻게 동작하는지 — 반드시 이해하고 도우세요]
+- 사용자는 파일(매뉴얼 PDF·데이터·사진·필기노트 등)을 올리고, 생성 AI(Claude/GPT)가 그 파일을 직접 읽어 학교 양식에 맞는 보고서 초안을 만듭니다.
+- 'AI 참고 메모'는 그 생성 AI에게 **함께 전달되는 보조 지시문**입니다. 파일에 없는 맥락(제외한 시행과 이유, 강조할 부분, 특이사항, 원하는 방향)을 알려주는 역할이며, 파일 데이터를 대체하지 않습니다.
+- 따라서 좋은 메모 = "생성 AI가 파일만 보고는 알 수 없는 것"을 짧고 명확하게 알려주는 글입니다. 파일에 이미 있는 내용을 반복하는 메모는 가치가 없습니다.
 
 [역할]
-- 사용자가 말한 실제 실험 내용·관찰·측정값·느낀 점을 바탕으로 보고서에 참고가 될 메모를 한국어로 깔끔히 정리·문장화합니다.
-- 정보가 부족하면 먼저 1~3개의 짧은 질문으로 물어봅니다(무엇을 측정했는지, 어떤 경향이었는지, 특이사항이나 오차로 의심되는 점 등).
-- 메모가 정리되면 마지막에 "메모 초안:" 으로 시작하는 최종본을 제시합니다(보고서 입력칸에 붙여넣기 좋게).
+- 사용자가 어떤 보고서를 만들려는지, 어떤 파일을 올릴 건지, 무엇을 강조/제외하고 싶은지 1~3개의 짧은 질문으로 파악합니다.
+- 사용자가 말한 실제 내용·관찰·의도를 바탕으로, 생성 AI에게 줄 메모를 한국어로 깔끔히 정리·문장화합니다.
+- 메모가 정리되면 마지막에 "메모 초안:" 으로 시작하는 최종본을 제시합니다(보고서 입력칸에 붙여넣기 좋게). 항목이 여러 개면 "- " 불릿으로.
 
 [절대 규칙]
 - 사용자가 말하지 않은 수치·결과·오차 원인·결론을 지어내지 마세요. 가정이 필요하면 "가정"임을 밝히거나 사용자에게 물어보세요.
-- 보고서 본문을 통째로 대필하지 말고 '참고 메모(요점)' 수준으로만 도와주세요.
-- 데이터 조작·허위 작성은 학업 부정행위입니다. 본인의 실제 실험을 정리하는 것만 돕습니다.
+- 보고서 본문을 통째로 대필하지 말고 '생성 AI에게 주는 지시 메모' 수준으로만 도와주세요.
+- 데이터 조작·허위 작성은 학업 부정행위입니다. 본인의 실제 실험·공부를 정리하는 것만 돕습니다.
 - 한국어로 간결하게.`;
+
+// 보고서 종류별 추가 안내 — 메모 도우미가 그 파이프라인의 입력·생성 방식에 맞춰 돕도록.
+const CHAT_MEMO_TYPE_GUIDES = {
+  "chem-pre": `
+[지금 사용자가 만들려는 것: 화학 사전보고서]
+- 입력 파일: 실험 매뉴얼 PDF(필수). 생성 AI가 매뉴얼을 읽고 실험목표·이론적 배경·기구/시약·실험 과정을 작성합니다. 시약 물성은 웹 검색으로 보강합니다.
+- 메모로 도울 수 있는 것: 이론적 배경에서 꼭 전개할 개념/식(예: 헨더슨-하셀바흐 식 유도), 수업에서 강조된 포인트, 매뉴얼과 다르게 진행할 절차 변경(농도·횟수 등), 분량/깊이 희망.
+- 메모에 넣지 말 것: 매뉴얼에 이미 있는 절차 반복, 아직 안 한 실험의 결과 예측.`,
+  "chem-result": `
+[지금 사용자가 만들려는 것: 화학 결과보고서]
+- 입력 파일: 사전보고서 PDF(필수) + 측정 데이터(엑셀/CSV/사진) + 실험 사진 + (선택) 매뉴얼. 생성 AI가 데이터로 표·그래프·계산(평균·% 오차 등)·분석·결론을 작성합니다.
+- 메모로 도울 수 있는 것: 제외한 시행과 그 이유(예: 2회차는 종말점 지나침), 실험 중 관찰한 특이사항(색 변화·온도 등), 오차가 의심되는 원인(본인이 실제 겪은 것만), 분석에서 꼭 다뤘으면 하는 비교/그래프.
+- 메모에 넣지 말 것: 데이터에 없는 수치, 실제로 안 일어난 오차 원인. 생성 AI는 업로드 데이터 원본을 우선하며 메모로 데이터를 바꿀 수 없습니다.`,
+  "phys-result": `
+[지금 사용자가 만들려는 것: 물리 결과보고서]
+- 입력 파일: PASCO Capstone(.cap)/엑셀/CSV/데이터 스크린샷 + (선택) 매뉴얼 PDF·사진. 생성 AI가 Part별 실험 결과(표·그래프·분석)와 결론(오차 분석·문제 해결 포함)을 작성합니다.
+- 메모로 도울 수 있는 것: 제외한 시행과 이유(예: 포토게이트 흔들림), 장치 세팅의 특이점(트랙 이음새 등), 어느 Part/분석을 강조할지, 이론값과 비교 시 쓸 식, 실험 중 실제 겪은 문제와 해결 시도.
+- 메모에 넣지 말 것: 측정 데이터에 없는 값, 실제 안 한 장비 조정. 생성 AI는 .cap/엑셀 원본 데이터를 우선합니다.`,
+  "phys-inquiry": `
+[지금 사용자가 만들려는 것: 물리 수행평가 — 일반물리학 탐구 및 사고 과정 성찰 보고서]
+- 입력: 탐구 주제 + 본인 필기노트 PDF + 참고자료. 생성 AI가 "초기 오개념 → 오류 인식 → 정확한 개념으로 해결 → 성찰" 서사로 학교 양식(I~IV)을 채웁니다.
+- 메모로 도울 수 있는 것(특히 중요): **처음에 무엇을 어떻게 잘못 생각했는지(오개념)**, 무엇을 계기로 깨달았는지, 노트 속 어떤 문제/유도를 꼭 포함할지, 분량 희망(자료 많으면 길게 가능), 결론에서 강조할 통찰.
+- 오개념 서사가 이 보고서의 핵심 평가 요소이므로, 사용자에게 "처음에 뭐라고 생각했었는지"를 꼭 물어보세요.`,
+  "math-inquiry": `
+[지금 사용자가 만들려는 것: 수학 수행평가 — 수학Ⅲ 급수 탐구보고서]
+- 입력: 급수 관련 탐구 주제 한 줄(파일 업로드 없음). 생성 AI가 정확한 수학 지식과 웹 검색으로 학교 양식(Ⅰ.탐구 주제 / Ⅱ.탐구 목적 / Ⅲ.선행연구 분석 / Ⅳ.탐구 과정 및 탐구 내용 / Ⅴ.탐구 결과 정리 및 반성)을 채웁니다. Ⅳ가 핵심(표·그래프·수식 풀전개)입니다.
+- 입력 파일이 없으므로 **메모가 방향을 정하는 유일한 수단**입니다. 메모로 도울 수 있는 것: 왜 이 주제가 궁금했는지(동기), 꼭 다루고 싶은 개념/유도, 직접 계산해 보고 싶은 것(부분합·오차 비교 등), 어떤 표·그래프를 넣고 싶은지, 창의적 연결(다른 분야·실생활).
+- 평가 기준이 "수학적 타당성·창의성 40 / 논리성·구성력(자료 활용) 40 / 발표 20"이고 만점이 목표이므로, 본인만의 동기·창의적 접근 방향을 꼭 물어보세요.
+- 메모에 넣지 말 것: 확인 안 된 수치·가짜 문헌. 수식·계산은 생성 AI가 정확히 전개합니다.`,
+};
 
 // ── 글쓰기 도우미(write-assist): 보고서 입력·문체 메모 작성을 Sonnet / GPT-5.4-mini 로 돕는다.
 // 메모/스타일 모드에서만 쓰며, 유료 모델이라 로그인 사용자 한정. 키 라우팅은 CODE_ASSIST_PROVIDERS 재사용.
@@ -967,11 +1158,15 @@ app.post("/api/chat", async (req, res) => {
     !memoMode && req.body && typeof req.body.context === "string"
       ? req.body.context.slice(0, 300).replace(/[\r\n]+/g, " ").trim()
       : "";
+  // 보고서 종류(메모를 어느 폼에서 열었는지) — 종류별 안내를 메모 프롬프트에 덧붙임.
+  const reportTypeHint = String((req.body && req.body.reportType) || "").trim();
+  const memoSystem =
+    CHAT_MEMO_SYSTEM + (CHAT_MEMO_TYPE_GUIDES[reportTypeHint] || "");
   const sysPrompt =
     assistKind === "style"
       ? WRITE_ASSIST_STYLE_SYSTEM
       : memoMode
-        ? CHAT_MEMO_SYSTEM
+        ? memoSystem
         : ctx
           ? CHAT_SYSTEM +
             `\n\n[지금 사용자가 보고 있는 화면] ${ctx} — 이 맥락을 고려해 답하세요.`
@@ -2226,6 +2421,7 @@ app.post("/api/feedback", requireAuth, async (req, res) => {
 app.post(
   "/api/generate",
   requireAuth,
+  limitTotalUpload,
   upload.any(),
   async (req, res) => {
     // 보고서 종류 결정 (없으면 화학 사전 = 기존 동작 보존)
@@ -2322,18 +2518,42 @@ app.post(
 
     const postedStudentId = normalizeStudentId(req.body.studentId);
     let savedStudentId = normalizeStudentId(userInfo.studentId);
+    // stale 세션 권한 차단: 학번을 새로 조회하는 김에 같은 fresh row 에서
+    // is_admin/unlimited/restricted_model 권한 플래그도 함께 읽어, 운영자가
+    // 권한을 회수했을 때 세션 만료를 기다리지 않고 즉시 반영한다(아래 모델
+    // 화이트리스트·크레딧 면제 판단에 세션 복사본 대신 fresh 값 사용).
+    // Supabase 미설정/조회 실패 시에는 기존 세션 값으로 graceful fallback.
+    // 이 row 는 크레딧 검증(getCredits)에서도 재사용해 추가 DB 호출을 피한다.
+    let effectiveIsAdmin = !!userInfo.isAdmin;
+    let effectiveUnlimited = !!userInfo.unlimited;
+    let effectiveRestrictedModel = userInfo.restrictedModel || null;
+    let freshUser = null;
     if (supa.isEnabled() && userInfo.id) {
       try {
-        const freshUser = await supa.findUserById(userInfo.id);
-        savedStudentId = normalizeStudentId(freshUser?.student_id) || savedStudentId;
-        req.session.userInfo.studentId = savedStudentId;
+        freshUser = await supa.findUserById(userInfo.id);
+        if (freshUser) {
+          savedStudentId =
+            normalizeStudentId(freshUser.student_id) || savedStudentId;
+          req.session.userInfo.studentId = savedStudentId;
+          effectiveIsAdmin = !!freshUser.is_admin;
+          effectiveUnlimited = !!freshUser.unlimited;
+          effectiveRestrictedModel = freshUser.restricted_model || null;
+          // 세션 복사본도 최신화(이후 요청에서의 stale 권한 노출 축소).
+          req.session.userInfo.isAdmin = effectiveIsAdmin;
+          req.session.userInfo.unlimited = effectiveUnlimited;
+          req.session.userInfo.restrictedModel = effectiveRestrictedModel;
+        }
       } catch (e) {
         console.warn("[generate] profile lookup failed:", e.message);
       }
     }
     pipelineInput.studentId =
       normalizeStudentId(pipelineInput.studentId) || postedStudentId || savedStudentId;
-    pipelineInput.allowHighlights = !!userInfo.isAdmin;
+    pipelineInput.allowHighlights = effectiveIsAdmin;
+    // AI 이미지(개념도) 생성 옵트인 — 전체 공개. 키가 있어야 실제 동작.
+    pipelineInput.allowImageGen =
+      String(req.body.allowImageGen) === "true" &&
+      !!(process.env.GPT_API_KEY || process.env.OPENAI_API_KEY);
     if (reportType === "phys-result" && !pipelineInput.studentId) {
       return res
         .status(400)
@@ -2358,35 +2578,77 @@ app.post(
     // 화이트리스트 검증으로 임의 모델 주입 차단. 기본 Opus 4.8.
     const ALLOWED_MODELS = [
       "claude-opus-4-8",
-      "claude-opus-4-7",
       "claude-sonnet-4-6",
     ];
+    // Fable 5 — 관리자 전용 최상위 모델(셀렉터도 관리자에게만 노출). 단 일시 차단 중에는 제외.
+    // 권한은 fresh row(effectiveIsAdmin) 기준 — 회수된 관리자 권한 즉시 반영.
+    if (effectiveIsAdmin && !FABLE_DISABLED) ALLOWED_MODELS.push("claude-fable-5");
+    // GPT(OpenAI) 보고서 생성은 배선 완료된 종류에만 허용(phys-inquiry 는 추후 배선).
+    const GPT_REPORT_MODELS = ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini"];
+    const GPT_OK_TYPES = new Set(["chem-pre", "chem-result", "phys-result", "free"]);
+    const allowedModels = GPT_OK_TYPES.has(reportType)
+      ? [...ALLOWED_MODELS, ...GPT_REPORT_MODELS]
+      : ALLOWED_MODELS;
     const requestedModel = String(req.body.model || "").trim();
-    let model = ALLOWED_MODELS.includes(requestedModel) ? requestedModel : null;
-    // 모델 제한 계정(예: 베타테스터)은 허용 모델로 강제
-    if (userInfo.restrictedModel) {
-      model = ALLOWED_MODELS.includes(userInfo.restrictedModel)
-        ? userInfo.restrictedModel
+    // Fable 5 요청 처리: 일시 차단 중이면 관리자 포함 전체 거부, 아니면 관리자 전용.
+    if (isFableModel(requestedModel)) {
+      if (FABLE_DISABLED) {
+        return res.status(403).json({
+          error: "Fable 5 모델은 현재 일시적으로 사용이 중단되었습니다. 다른 모델을 선택해 주세요.",
+        });
+      }
+      if (!effectiveIsAdmin) {
+        return res
+          .status(403)
+          .json({ error: "Fable 5 모델은 관리자 전용입니다." });
+      }
+    }
+    let model = allowedModels.includes(requestedModel) ? requestedModel : null;
+    // 모델 제한 계정(예: 베타테스터)은 허용 모델로 강제 — fresh row 기준.
+    if (effectiveRestrictedModel) {
+      model = allowedModels.includes(effectiveRestrictedModel)
+        ? effectiveRestrictedModel
         : "claude-sonnet-4-6";
     }
     if (!model) model = "claude-opus-4-8"; // 기본 = Opus 4.8
+    // GPT 선택인데 서버에 키가 없으면 명확히 거부(Claude로 조용히 바꾸지 않음).
+    if (
+      /^gpt/i.test(model) &&
+      !(process.env.GPT_API_KEY || process.env.OPENAI_API_KEY)
+    ) {
+      return res.status(503).json({
+        error:
+          "GPT 모델은 현재 서버에 키가 설정되지 않아 사용할 수 없습니다(GPT_API_KEY).",
+      });
+    }
     // 베타·무료 보고서는 크레딧 미차감(0). 그 외는 모델별 단가.
     const isFreeBeta = FREE_BETA_TYPES.has(reportType);
     const creditCost = isFreeBeta ? 0 : pricing.getModelCredits(model);
+    // AI 이미지 생성: 장당 1크레딧, 보고서당 최대 2장(lib/report-image-gen.js MAX_FIGURES 동기화).
+    // 실제 차감은 생성된 장수만큼(runGeneration). 여기선 최악의 경우를 잔액 검증에 예약.
+    const reservedImageCredits =
+      !isFreeBeta && pipelineInput.allowImageGen ? 1 * 2 : 0;
 
     // 크레딧 검증 (Supabase + 일반 사용자. admin·무제한 계정·무료 베타는 제외)
+    // 권한 면제 판단은 fresh row(effectiveIsAdmin/effectiveUnlimited) 기준.
     if (
       !isFreeBeta &&
       supa.isEnabled() &&
       userInfo.id &&
-      !userInfo.isAdmin &&
-      !userInfo.unlimited
+      !effectiveIsAdmin &&
+      !effectiveUnlimited
     ) {
       try {
-        const have = await supa.getCredits(userInfo.id);
-        if (have < creditCost) {
+        // 위 profile lookup 에서 받은 fresh row 가 있으면 잔액도 거기서 읽어
+        // 중복 DB 호출을 피한다(getCredits 와 동일한 정규화 적용). 없으면 조회.
+        const have =
+          freshUser != null
+            ? Math.max(0, Math.trunc(Number(freshUser.credits) || 0))
+            : await supa.getCredits(userInfo.id);
+        const need = creditCost + reservedImageCredits;
+        if (have < need) {
           return res.status(402).json({
-            error: `🚫 크레딧 부족 (보유 ${have} / 필요 ${creditCost}). 관리자에게 충전을 요청하세요.`,
+            error: `🚫 크레딧 부족 (보유 ${have} / 필요 ${need}). 관리자에게 충전을 요청하세요.`,
           });
         }
       } catch (e) {
@@ -2737,6 +2999,7 @@ app.post(
 app.post(
   "/api/translate-pdf",
   requireBeta("pdf-translate"),
+  limitTotalUpload,
   upload.single("pdf"),
   async (req, res) => {
     const file = req.file;
@@ -2755,6 +3018,22 @@ app.post(
 
     const userInfo = getSessionUser(req);
 
+    // stale 세션 권한 차단(generate 와 동일 패턴): Fable/관리자 모델 게이팅에
+    // 세션 복사본 대신 DB 최신 is_admin 을 쓴다 — 권한 회수 즉시 반영.
+    // Supabase 미설정/조회 실패 시 기존 세션 값으로 graceful fallback.
+    let effectiveIsAdmin = !!userInfo.isAdmin;
+    if (supa.isEnabled() && userInfo.id) {
+      try {
+        const freshUser = await supa.findUserById(userInfo.id);
+        if (freshUser) {
+          effectiveIsAdmin = !!freshUser.is_admin;
+          req.session.userInfo.isAdmin = effectiveIsAdmin;
+        }
+      } catch (e) {
+        console.warn("[translate-pdf] privilege lookup failed:", e.message);
+      }
+    }
+
     // 모델 선택(관리자) — 기본은 translate.js 의 기본값(문서 번역엔 Sonnet 으로 충분).
     // OpenAI GPT 는 PDF 통번역 베타 도입(GPT_API_KEY 필요). gpt-5.4-mini 는 빠르고 저렴.
     const ALLOWED_MODELS = [
@@ -2765,7 +3044,22 @@ app.post(
       "gpt-5.4",
       "gpt-5.4-mini",
     ];
+    // Fable 5 — 관리자 전용(번역 UI도 관리자에게만 노출). 단 일시 차단 중에는 제외.
+    // 권한은 fresh row(effectiveIsAdmin) 기준 — 회수된 관리자 권한 즉시 반영.
+    if (effectiveIsAdmin && !FABLE_DISABLED) ALLOWED_MODELS.push("claude-fable-5");
     const requested = String(req.body.model || "").trim();
+    if (isFableModel(requested)) {
+      if (FABLE_DISABLED) {
+        return res.status(403).json({
+          error: "Fable 5 모델은 현재 일시적으로 사용이 중단되었습니다. 다른 모델을 선택해 주세요.",
+        });
+      }
+      if (!effectiveIsAdmin) {
+        return res
+          .status(403)
+          .json({ error: "Fable 5 모델은 관리자 전용입니다." });
+      }
+    }
     const model = ALLOWED_MODELS.includes(requested) ? requested : null;
 
     // 진행 중 작업 자동 중단 (generate 와 동일 정책)
@@ -2961,7 +3255,10 @@ async function prepareScannedRouting(pdfBuffer, { signal, onProgress }) {
 
 async function runPdfTranslation(job, { pdfBuffer, originalName, model, mode }) {
   const t0 = Date.now();
-  const timeoutMin = Math.round(PDF_TRANSLATE_TIMEOUT_MS / 60000);
+  const translateTimeoutMs = /^claude-fable/.test(String(model || ""))
+    ? PDF_TRANSLATE_FABLE_TIMEOUT_MS
+    : PDF_TRANSLATE_TIMEOUT_MS;
+  const timeoutMin = Math.round(translateTimeoutMs / 60000);
   pushProgress(job, `🚀 PDF 통번역 시작 (timeout: ${timeoutMin}분)`);
 
   const ac = new AbortController();
@@ -2971,7 +3268,7 @@ async function runPdfTranslation(job, { pdfBuffer, originalName, model, mode }) 
     timedOut = true;
     pushProgress(job, `⏰ ${timeoutMin}분 초과 — 강제 종료 중...`);
     ac.abort();
-  }, PDF_TRANSLATE_TIMEOUT_MS);
+  }, translateTimeoutMs);
 
   try {
     const sizeKB = Math.round(pdfBuffer.length / 1024);
@@ -3323,6 +3620,23 @@ function collectUserNotes(textValue, filesByField = {}) {
   return normalizeUserNotes(parts.join("\n\n---\n\n"));
 }
 
+// 데이터/메모 이상 점검 결과(data_warnings)를 UI 표시용 문자열 배열로 정규화.
+// 보고서 본문엔 넣지 않고, 사이트 결과 아래 "참고 사항"으로만 보여준다(B안).
+function normalizeWarnings(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  for (const w of raw) {
+    let s = "";
+    if (typeof w === "string") s = w;
+    else if (w && typeof w === "object")
+      s = w.issue || w.message || w.detail || w.text || w.warning || "";
+    s = String(s || "").replace(/\s+/g, " ").trim();
+    if (s) out.push(s.slice(0, 300));
+    if (out.length >= 10) break;
+  }
+  return out;
+}
+
 async function runGeneration(job, pipeline, pipelineInput, meta) {
   const {
     date,
@@ -3332,7 +3646,8 @@ async function runGeneration(job, pipeline, pipelineInput, meta) {
     policyAcknowledgement,
   } = meta;
   const t0 = Date.now();
-  const timeoutMin = Math.round(JOB_TIMEOUT_MS / 60000);
+  const jobTimeoutMs = jobTimeoutForModel(model);
+  const timeoutMin = Math.round(jobTimeoutMs / 60000);
   pushProgress(
     job,
     `🚀 작업 시작 (${pipeline.label}, timeout: ${timeoutMin}분)`,
@@ -3345,7 +3660,7 @@ async function runGeneration(job, pipeline, pipelineInput, meta) {
     timedOut = true;
     pushProgress(job, `⏰ ${timeoutMin}분 초과 — 강제 종료 중...`);
     ac.abort();
-  }, JOB_TIMEOUT_MS);
+  }, jobTimeoutMs);
 
   try {
     const content = await pipeline.generateContent({
@@ -3355,9 +3670,44 @@ async function runGeneration(job, pipeline, pipelineInput, meta) {
       model,
       outputFormat: format,
       allowHighlights: !!pipelineInput.allowHighlights,
+      allowImageGen: !!pipelineInput.allowImageGen,
       onProgress: (msg) => pushProgress(job, msg),
     });
     content.__allowHighlights = !!pipelineInput.allowHighlights;
+
+    // AI 개념도 실제 생성분 추가 과금 (장당 1크레딧 — 위 잔액 예약치와 동기화).
+    const generatedFigureCount = Array.isArray(content.__figures)
+      ? content.__figures.length
+      : 0;
+    if (
+      generatedFigureCount > 0 &&
+      typeof job.creditCost === "number" &&
+      !FREE_BETA_TYPES.has(job.reportType)
+    ) {
+      job.creditCost += generatedFigureCount * 1;
+      pushProgress(
+        job,
+        `🖼 AI 개념도 ${generatedFigureCount}장 — +${generatedFigureCount}크레딧 추가 과금`,
+      );
+    }
+
+    // 데이터·사용자 메모 이상 점검(B안): 보고서엔 넣지 않고 사이트 결과 아래 표시.
+    job.warnings = normalizeWarnings(content.data_warnings);
+    if (job.warnings.length) {
+      pushProgress(
+        job,
+        `⚠️ 데이터·메모 점검 ${job.warnings.length}건 — 결과 아래 '참고 사항'을 확인하세요.`,
+      );
+      job.warnings.forEach((w) => pushProgress(job, `   • ${w}`));
+    }
+
+    // AI 이어쓰기 인수인계 프롬프트(다른 AI에 붙여넣어 이어 편집용) — 문서엔 안 넣고 UI에만.
+    job.handoff =
+      typeof content.ai_handoff === "string"
+        ? content.ai_handoff.replace(/\r\n/g, "\n").trim().slice(0, 6000)
+        : "";
+    if (job.handoff) pushProgress(job, "🤝 'AI로 이어서 편집' 인수인계 프롬프트 생성됨 — 결과 아래에서 복사하세요.");
+
     const fontFace = normalizeFontFace(pipelineInput.fontFace);
     Object.defineProperty(content, "__fontFace", {
       value: fontFace,
@@ -3387,6 +3737,50 @@ async function runGeneration(job, pipeline, pipelineInput, meta) {
     content.temperature = String(pipelineInput.temperature || "").trim();
     content.pressure = String(pipelineInput.pressure || "").trim();
     content.report_number = extractReportLabel(sourceFilename);
+
+    // 업로드한 .hwpx 스타일 참고 자료가 있으면 그 사람 글꼴을 감지해 출력에 적용.
+    // (글꼴 family 는 그대로 적용 — 설치돼 있어야 표시. 크기는 분량/양식 보호를 위해
+    //  자동 적용하지 않고 안내만 한다.) detected_font_face 는 enumerable 이라
+    //  hwpx 직렬화(JSON.stringify)에도 그대로 실린다.
+    try {
+      const detectedFont = await styleRef.detectStyleFont(
+        pipelineInput.styleRefs || [],
+      );
+      if (detectedFont && detectedFont.face) {
+        content.detected_font_face = detectedFont.face;
+        if (detectedFont.sizePt) content.detected_font_size_pt = detectedFont.sizePt;
+        job.styleFont = {
+          bodyFace: detectedFont.face,
+          bodySizePt: detectedFont.sizePt || 0,
+          headingFace: detectedFont.headingFace || "",
+          headingSizePt: detectedFont.headingSizePt || 0,
+          headingBold: !!detectedFont.headingBold,
+          profile: Array.isArray(detectedFont.profile) ? detectedFont.profile : [],
+        };
+        pushProgress(
+          job,
+          `🖊 한글파일(.hwpx) 글꼴 상세 분석 — 본문 글꼴로 ${detectedFont.face}${
+            detectedFont.sizePt ? ` ${detectedFont.sizePt}pt` : ""
+          } 적용`,
+        );
+        if (detectedFont.headingFace) {
+          pushProgress(
+            job,
+            `   · 제목/소제목: ${detectedFont.headingFace}${
+              detectedFont.headingSizePt ? ` ${detectedFont.headingSizePt}pt` : ""
+            }${detectedFont.headingBold ? " 굵게" : ""}`,
+          );
+        }
+        (detectedFont.profile || []).forEach((c) => {
+          pushProgress(
+            job,
+            `   · ${c.face} ${c.sizePt}pt${c.bold ? " 굵게" : ""} — ${c.share}%`,
+          );
+        });
+      }
+    } catch (e) {
+      pushProgress(job, `⚠ 스타일 글꼴 감지 건너뜀: ${e.message}`);
+    }
 
     const ext = format === "hwpx" ? "hwpx" : "docx";
     pushProgress(job, `📄 .${ext} 파일 빌드 중...`);
@@ -3549,7 +3943,12 @@ async function runGeneration(job, pipeline, pipelineInput, meta) {
         supa.isEnabled() &&
         job.userInfo.id
       ) {
-        const cost = job.creditCost || pricing.getModelCredits(job.model);
+        // 0크레딧 모델(무료, 예: GPT-5.4 mini)은 차감 자체를 건너뛴다.
+        // (?? 사용: ||는 0을 falsy로 봐서 모델 단가로 잘못 폴백함)
+        const cost = job.creditCost ?? pricing.getModelCredits(job.model);
+        if (cost <= 0) {
+          pushProgress(job, "💳 무료 모델 — 크레딧이 차감되지 않았습니다.");
+        } else {
         try {
           const { newBalance } = await supa.spendCredits(job.userInfo.id, cost);
           pushProgress(job, `💳 크레딧 ${cost} 차감 — 남은 크레딧: ${newBalance}`);
@@ -3561,6 +3960,7 @@ async function runGeneration(job, pipeline, pipelineInput, meta) {
             job,
             `⚠ 크레딧 차감 실패로 이번 건이 미청구로 기록되었습니다(운영자 확인 필요): ${e.message}`,
           );
+        }
         }
       }
     } else {
@@ -3595,7 +3995,7 @@ async function runGeneration(job, pipeline, pipelineInput, meta) {
   }
 
   job.listeners.forEach((r) => {
-    sendSse(r, "done", { filename: job.filename, fileId: job.fileId });
+    sendSse(r, "done", { filename: job.filename, fileId: job.fileId, warnings: job.warnings || [], styleFont: job.styleFont || null, handoff: job.handoff || "" });
     r.end();
   });
   job.listeners = [];
@@ -3639,7 +4039,7 @@ app.get("/api/jobs/:id/stream", requireAuth, (req, res) => {
   job.progress.forEach((p) => sendSse(res, "progress", p));
 
   if (job.status === "done") {
-    sendSse(res, "done", { filename: job.filename, fileId: job.fileId });
+    sendSse(res, "done", { filename: job.filename, fileId: job.fileId, warnings: job.warnings || [], styleFont: job.styleFont || null, handoff: job.handoff || "" });
     return res.end();
   }
   if (job.status === "error") {
@@ -3709,6 +4109,16 @@ app.use(
 
 // 랩(기술 공개): 공개 읽기 — 제목 목록 / 상세(본문+코드) / 코드 파일 다운로드(화이트리스트).
 app.use("/api/lab", require("./lib/lab-routes")());
+
+// 창작(만들기): AI 아티팩트 빌더 — 생성은 관리자/베타('create'), 보기는 모두 공개.
+app.use(require("./lib/artifacts-routes")({ requireAdmin, requireAdminOrBeta, getSessionUser }));
+
+// 코딩 테스트(정보 수행평가 대비, 베타): 문제 본문·테스트·채점 하니스 제공.
+// 채점은 브라우저(Pyodide)에서 수행. 베타 게이트("coding-test") — 관리자/테스터 한정.
+app.use("/api/coding", require("./lib/coding-routes")({ requireAdminOrBeta, getSessionUser }));
+
+// 공지사항: 공개 읽기(활성) + 관리자 CRUD. Supabase 테이블 없으면 메모리 fallback.
+app.use("/api/announcements", require("./lib/announcement-routes")({ requireAdmin }));
 
 app.get("/api/cloud/status", requireAuth, async (req, res) => {
   const u = getSessionUser(req);
@@ -4031,7 +4441,14 @@ app.patch("/api/admin/users/:id", requireAdmin, async (req, res) => {
   }
   // 모델 제한: "" = 전체 허용, 그 외엔 허용 모델 id만
   if (restrictedModel !== undefined) {
-    const allowedRestrict = ["", "claude-opus-4-8", "claude-sonnet-4-6"];
+    const allowedRestrict = [
+      "",
+      "claude-opus-4-8",
+      "claude-sonnet-4-6",
+      "gpt-5.5",
+      "gpt-5.4",
+      "gpt-5.4-mini",
+    ];
     const rm = restrictedModel == null ? "" : String(restrictedModel).trim();
     if (!allowedRestrict.includes(rm)) {
       return res
@@ -4042,7 +4459,7 @@ app.patch("/api/admin/users/:id", requireAdmin, async (req, res) => {
   // 보고서 종류 접근 제한: 허용된 종류 key 배열만
   let normalizedBlocked;
   if (blockedReportTypes !== undefined) {
-    const VALID = ["chem-pre", "chem-result", "phys-result", "phys-inquiry"];
+    const VALID = ["chem-pre", "chem-result", "phys-result", "phys-inquiry", "math-inquiry"];
     if (!Array.isArray(blockedReportTypes)) {
       return res
         .status(400)
@@ -4261,16 +4678,40 @@ app.get("/api/version", (req, res) => {
   });
 });
 
-// Supabase 7일 무활동 자동 pause 방지용 keepalive.
-// UptimeRobot 등 외부 모니터가 주기적으로 호출 → Supabase에 가벼운 쿼리 실행.
+// keepalive: "웹 서버가 살아있다"는 신호. 외부 모니터(cron-job.org)와 self-ping이 호출한다.
 // 인증 없음 (외부 모니터가 공개 endpoint로 호출).
-app.get("/api/keepalive", async (req, res) => {
-  const result = await supa.ping();
-  if (result.ok) {
-    res.json({ ok: true, ts: new Date().toISOString() });
-  } else {
-    res.status(503).json({ ok: false, reason: result.reason });
-  }
+//
+// ⚠️ 항상 200을 반환하고, Supabase ping을 await 하지 않는다.
+// 과거엔 Supabase ping 실패 시 503을 뱉었는데, 외부 모니터(cron-job.org 등)가 그걸
+// "실패"로 보고 연속 실패가 쌓이면 잡을 자동 비활성화 → 아무도 사이트를 못 깨워서
+// Render가 영영 잠드는 닭-달걀 함정이 있었다. 또 supa.ping()을 await 하면 Supabase가
+// 느릴 때 응답이 지연되어, 콜드스타트 타임아웃으로 오탐(=실패)이 나기도 했다.
+// 이 endpoint의 목적은 "서버가 응답할 수 있는가"이므로, 서버가 살아있는 한 200이어야 한다.
+// Supabase는 7일 pause 방지를 위해 백그라운드로 가볍게 깨우고, 상태는 body에만 싣는다.
+let lastSupabasePing = { ok: null, ts: null, reason: null };
+function pingSupabaseInBackground() {
+  supa
+    .ping()
+    .then((r) => {
+      lastSupabasePing = {
+        ok: r.ok,
+        ts: new Date().toISOString(),
+        reason: r.ok ? null : r.reason,
+      };
+      if (!r.ok) console.warn(`  ⚠ keepalive: Supabase ping 실패 — ${r.reason}`);
+    })
+    .catch((e) => {
+      lastSupabasePing = { ok: false, ts: new Date().toISOString(), reason: e.message };
+    });
+}
+app.get("/api/keepalive", (req, res) => {
+  pingSupabaseInBackground(); // 결과를 기다리지 않는다 — HTTP 상태에 영향 없음.
+  res.json({
+    ok: true,
+    server: "up",
+    supabase: lastSupabasePing.ok, // 직전 백그라운드 ping 결과(null=아직 없음)
+    ts: new Date().toISOString(),
+  });
 });
 
 // multer 업로드 에러 핸들러 (파일 크기·개수 초과 등)
@@ -4278,7 +4719,7 @@ app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     let msg = "파일 업로드 오류: " + err.code;
     if (err.code === "LIMIT_FILE_SIZE") {
-      msg = "파일이 너무 큽니다 (단일 파일 최대 25MB).";
+      msg = `파일이 너무 큽니다 (단일 파일 최대 ${Math.round(MAX_UPLOAD_BYTES / 1024 / 1024)}MB).`;
     } else if (err.code === "LIMIT_FILE_COUNT") {
       msg = "파일이 너무 많습니다 (최대 50개). 사진 수를 줄이거나 여러 번 나눠 생성해보세요.";
     } else if (err.code === "LIMIT_PART_COUNT") {
@@ -4349,6 +4790,25 @@ app.listen(PORT, async () => {
     } catch (e) {
       console.warn(`  ⚠ Admin bootstrap 실패: ${e.message}`);
     }
+    // 코드 내장 베타(물리 수행평가)를 관리자 베타 패널에 자동 등록 → 테스터 지정 가능.
+    try {
+      const seeded = await supa.ensureBetaFeature("phys-inquiry", "물리 수행평가");
+      if (seeded) console.log("  ✓ 베타 기능 등록: 물리 수행평가(phys-inquiry)");
+    } catch (e) {
+      console.warn(`  ⚠ 베타 기능 등록 실패: ${e.message}`);
+    }
+    try {
+      const seeded = await supa.ensureBetaFeature("math-inquiry", "수학 수행평가");
+      if (seeded) console.log("  ✓ 베타 기능 등록: 수학 수행평가(math-inquiry)");
+    } catch (e) {
+      console.warn(`  ⚠ 베타 기능 등록 실패(math-inquiry): ${e.message}`);
+    }
+    try {
+      const seeded = await supa.ensureBetaFeature("create", "창작(만들기)");
+      if (seeded) console.log("  ✓ 베타 기능 등록: 창작(create)");
+    } catch (e) {
+      console.warn(`  ⚠ 베타 기능 등록 실패(create): ${e.message}`);
+    }
     try {
       const result = await supa.cleanupExpiredReportFiles(200);
       if (result.deleted) {
@@ -4374,7 +4834,12 @@ app.listen(PORT, async () => {
   if (SELF_URL && process.env.DISABLE_SELF_PING !== "1") {
     const pingUrl = SELF_URL.replace(/\/+$/, "") + "/api/keepalive";
     const selfPingTimer = setInterval(() => {
-      fetch(pingUrl).catch(() => {});
+      // 30초 타임아웃 — 한 번 잠들어 콜드스타트가 길면 fetch가 무한정 매달리지 않게.
+      const ac = new AbortController();
+      const t = setTimeout(() => ac.abort(), 30 * 1000);
+      fetch(pingUrl, { signal: ac.signal })
+        .catch(() => {})
+        .finally(() => clearTimeout(t));
     }, 5 * 60 * 1000); // 5분마다 (Render 15분 한계보다 충분히 짧게, 1회 실패에도 여유)
     if (typeof selfPingTimer.unref === "function") selfPingTimer.unref();
     console.log(`  ✓ self-ping 활성화: ${pingUrl} (5분 간격)`);

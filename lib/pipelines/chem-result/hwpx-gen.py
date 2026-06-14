@@ -401,6 +401,60 @@ def build_procedure(doc, content):
                 counter -= 1
 
 
+def _emit_exp_photos(doc, exp, photos, fig_counter):
+    """실험 한 파트의 사진들을 캡션과 함께 삽입하고 갱신된 fig_counter 를 반환.
+    default·minimal 출력이 동일한 캡션 규칙(사진마다 다른 캡션)을 공유하도록 분리."""
+    photo_indices = as_list(exp.get("photo_indices"))
+    photo_captions = exp.get("photo_captions")
+    if not isinstance(photo_captions, list):
+        photo_captions = []
+    multiple = len(photo_indices) > 1
+    for pos, photo_idx in enumerate(photo_indices):
+        try:
+            photo = photos[int(photo_idx)]
+        except Exception:
+            continue
+        blob = decode_base64(photo.get("data_base64"))
+        fmt = image_format(photo.get("name"), photo.get("mimetype"), blob)
+        fig_counter += 1
+        # 사진마다 다른 캡션: photo_captions[위치] 우선. 없으면 단일 사진은 통합 캡션/실험명을,
+        # 여러 장이면 같은 통합 캡션을 모든 사진에 반복하지 않도록 첫 사진에만 단다.
+        per_photo = ""
+        if pos < len(photo_captions) and isinstance(photo_captions[pos], str):
+            per_photo = photo_captions[pos].strip()
+        if per_photo:
+            desc = per_photo
+        elif multiple:
+            desc = (exp.get("photo_caption") or exp.get("name") or "실험 사진") if pos == 0 else ""
+        else:
+            desc = exp.get("photo_caption") or exp.get("name") or "실험 사진"
+        caption = f"[그림 {fig_counter}] {desc}".rstrip()
+        add_picture(doc, blob, fmt=fmt, caption=caption)
+    return fig_counter
+
+
+def _emit_charts(doc, charts, fig_counter):
+    """차트 PNG 들을 본문에 삽입하고 갱신된 fig_counter 를 반환."""
+    for chart in as_list(charts):
+        blob = decode_base64(chart.get("png_base64"))
+        if not blob:
+            continue
+        fig_counter += 1
+        title = chart.get("title") or "그래프"
+        caption = f"[그림 {fig_counter}] {title}"
+        if chart.get("caption"):
+            caption += f" - {chart.get('caption')}"
+        add_picture(
+            doc,
+            blob,
+            fmt="png",
+            caption=caption,
+            max_width=MAX_CHART_WIDTH,
+            max_height=MAX_CHART_HEIGHT,
+        )
+    return fig_counter
+
+
 def build_data(doc, content):
     pre.add_heading(doc, "5. 실험 결과", size=pre.SIZE_TITLE, space_before=pre.SPACE_HEADING_LV1, space_after=pre.SPACE_HEADING_LV2)
     data = content.get("data") or {}
@@ -436,16 +490,7 @@ def build_data(doc, content):
             if not pre.add_numbered_item(doc, counter, text):
                 counter -= 1
 
-        for photo_idx in as_list(exp.get("photo_indices")):
-            try:
-                photo = photos[int(photo_idx)]
-            except Exception:
-                continue
-            blob = decode_base64(photo.get("data_base64"))
-            fmt = image_format(photo.get("name"), photo.get("mimetype"), blob)
-            fig_counter += 1
-            caption = f"[그림 {fig_counter}] {exp.get('photo_caption') or exp.get('name') or '실험 사진'}"
-            add_picture(doc, blob, fmt=fmt, caption=caption)
+        fig_counter = _emit_exp_photos(doc, exp, photos, fig_counter)
 
     summary_table = data.get("summary_table") or {}
     if summary_table.get("headers") and isinstance(summary_table.get("rows"), list):
@@ -457,23 +502,7 @@ def build_data(doc, content):
             caption=f"[표 {table_counter}] 실험 결과 요약",
         )
 
-    for chart in as_list(data.get("charts")):
-        blob = decode_base64(chart.get("png_base64"))
-        if not blob:
-            continue
-        fig_counter += 1
-        title = chart.get("title") or "그래프"
-        caption = f"[그림 {fig_counter}] {title}"
-        if chart.get("caption"):
-            caption += f" - {chart.get('caption')}"
-        add_picture(
-            doc,
-            blob,
-            fmt="png",
-            caption=caption,
-            max_width=MAX_CHART_WIDTH,
-            max_height=MAX_CHART_HEIGHT,
-        )
+    fig_counter = _emit_charts(doc, data.get("charts"), fig_counter)
 
 
 def build_discussion(doc, content):
@@ -523,17 +552,124 @@ def build_pcei(doc, content):
         pre.add_para(doc, str(pcei[key]), indent_left=pre.INDENT_5MM)
 
 
+def _para_text(value):
+    return pre.strip_manual_numbering(value) if isinstance(value, str) else str(value)
+
+
+def build_minimal_data(doc, content):
+    """minimal 스타일: 가./나./다. 헤더 없이 실험명만 굵게, 표·통계 한 줄·사진·차트는
+    본문 흐름에 그대로. docx-gen.js buildMinimalData 와 동일한 출력 규칙."""
+    pre.add_heading(doc, "5. 실험 결과", size=pre.SIZE_TITLE, space_before=pre.SPACE_HEADING_LV1, space_after=pre.SPACE_HEADING_LV2)
+    data = content.get("data") or {}
+    photos = as_list(content.get("__photos"))
+    fig_counter = 0
+    table_counter = 0
+
+    if data.get("summary"):
+        pre.add_para(doc, str(data["summary"]))
+
+    exps = as_list(data.get("experiments"))
+    multiple_exps = len(exps) > 1
+    for exp in exps:
+        # 가./나. 헤더 금지 — 실험이 여러 개일 때만 실험명을 굵은 한 줄로.
+        if multiple_exps:
+            pre.add_para(doc, str(exp.get("name", "")), bold=True, space_after=120)
+
+        table = exp.get("table") or {}
+        if table.get("headers") and isinstance(table.get("rows"), list):
+            table_counter += 1
+            add_table(
+                doc,
+                table.get("headers"),
+                table.get("rows"),
+                caption=f"[표 {table_counter}] {exp.get('name', '측정 데이터')}",
+            )
+
+        stats = as_list(exp.get("stats"))
+        if stats:
+            parts = []
+            for stat in stats:
+                if isinstance(stat, dict):
+                    parts.append(f"{stat.get('label', '')}: {stat.get('value', '')}")
+                else:
+                    parts.append(str(stat))
+            pre.add_para(doc, ", ".join(parts), indent_left=pre.INDENT_5MM)
+
+        fig_counter = _emit_exp_photos(doc, exp, photos, fig_counter)
+
+    summary_table = data.get("summary_table") or {}
+    if summary_table.get("headers") and isinstance(summary_table.get("rows"), list):
+        table_counter += 1
+        add_table(
+            doc,
+            summary_table.get("headers"),
+            summary_table.get("rows"),
+            caption=f"[표 {table_counter}] 실험 결과 요약",
+        )
+
+    fig_counter = _emit_charts(doc, data.get("charts"), fig_counter)
+
+
+def build_minimal_discussion(doc, content):
+    """minimal: 가./나./다. 헤더 없이 '6. 결론'. analysis 와 errors/improvements 가
+    모두 있으면 '7. 논의'로 분리. docx-gen.js buildMinimalDiscussion 과 동일."""
+    d = content.get("discussion") or {}
+    analysis = as_list(d.get("analysis"))
+    errors = as_list(d.get("errors"))
+    improvements = as_list(d.get("improvements"))
+    has_discussion = len(errors) > 0 or len(improvements) > 0
+
+    pre.add_heading(doc, "6. 결론", size=pre.SIZE_TITLE, space_before=pre.SPACE_HEADING_LV1, space_after=pre.SPACE_HEADING_LV2)
+    if not analysis and not has_discussion:
+        pre.add_para(doc, "(논의 데이터 부족)")
+    elif analysis:
+        for a in analysis:
+            pre.add_para(doc, _para_text(a))
+    else:
+        for t in [*errors, *improvements]:
+            pre.add_para(doc, _para_text(t))
+
+    if analysis and has_discussion:
+        pre.add_heading(doc, "7. 논의", size=pre.SIZE_TITLE, space_before=pre.SPACE_HEADING_LV1, space_after=pre.SPACE_HEADING_LV2)
+        for e in errors:
+            pre.add_para(doc, _para_text(e))
+        for imp in improvements:
+            pre.add_para(doc, _para_text(imp))
+
+
+def build_minimal_references(doc, content):
+    """minimal: 결론+논의가 분리됐으면 8번, 아니면 7번. docx-gen.js buildMinimalReferences 와 동일."""
+    d = content.get("discussion") or {}
+    has_discussion = len(as_list(d.get("analysis"))) > 0 and (
+        len(as_list(d.get("errors"))) > 0 or len(as_list(d.get("improvements"))) > 0
+    )
+    num = 8 if has_discussion else 7
+    pre.add_heading(doc, f"{num}. 참고 문헌", size=pre.SIZE_TITLE, space_before=pre.SPACE_HEADING_LV1, space_after=pre.SPACE_HEADING_LV2)
+    refs = as_list(content.get("references"))
+    if not refs:
+        pre.add_para(doc, "(참고문헌 미작성)")
+        return
+    for ref in refs:
+        pre.add_para(doc, ref_to_string(ref))
+
+
 def generate_hwpx(content):
     doc = HwpxDocument.new()
     doc._v5_allow_highlights = bool(content.get("__allowHighlights", True))
     pre.apply_page_layout(doc)
-    pre.apply_default_font(doc, pre.normalize_font_face(content.get("font_face") or content.get("__fontFace")))
+    pre.apply_default_font(doc, pre.resolve_font_face(content))
     # chem-result output is the continuation to place after the uploaded
     # pre-report PDF, so only render the added result/report-back sections.
-    build_data(doc, content)
-    build_discussion(doc, content)
-    build_references(doc, content)
-    build_pcei(doc, content)
+    if content.get("__style") == "minimal":
+        # minimal: 가./나./다. 헤더·PCEI 없이 docx minimal 과 동일한 간결 구성.
+        build_minimal_data(doc, content)
+        build_minimal_discussion(doc, content)
+        build_minimal_references(doc, content)
+    else:
+        build_data(doc, content)
+        build_discussion(doc, content)
+        build_references(doc, content)
+        build_pcei(doc, content)
     return doc
 
 

@@ -187,6 +187,7 @@
         </a>
         <div class="header-actions">
           <a href="/">메인으로</a>
+          <a href="/create.html">🛠 만들기</a>
           <a href="/translate.html">PDF 통번역</a>
           <a href="#" id="logout">로그아웃</a>
           <button
@@ -215,6 +216,7 @@
       <button class="atab" data-go="users">👤 사용자</button>
       <button class="atab" data-go="beta">🧪 베타</button>
       <button class="atab" data-go="logs">📊 로그</button>
+      <button class="atab" data-go="announce">📢 공지</button>
       <button class="atab" data-go="appeals">🛡 소명·제재</button>
       <button class="atab" data-go="editor">🧩 코드 에디터</button>
     </nav>
@@ -233,6 +235,19 @@
         <textarea id="aaInput" rows="1" placeholder="예: 최근 로그인 실패가 많은 IP 있어?" style="flex:1;resize:none;border:1px solid #d7dbe8;border-radius:9px;padding:9px 11px;font:inherit;font-size:14px"></textarea>
         <button id="aaSend" class="secondary compact">전송</button>
       </div>
+    </section>
+
+    <section class="settings-card" id="adminAnnSection">
+      <h2>📢 공지사항 (상단 티커)</h2>
+      <p class="hint">여기 등록한 공지는 메인 화면 상단에 흐르는 띠(티커)로 계속 노출됩니다. 활성/비활성·삭제로 관리하세요.</p>
+      <div class="compact-form" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+        <label style="flex:2;min-width:200px">제목<br><input id="annTitle" maxlength="200" placeholder="예: 1학기 기말 대비 점검 안내" style="width:100%"></label>
+        <label style="flex:0 0 110px">분류<br><input id="annCat" maxlength="40" placeholder="공지" style="width:100%"></label>
+        <label style="flex:1;min-width:150px">링크(선택)<br><input id="annLink" maxlength="500" placeholder="https://..." style="width:100%"></label>
+        <button id="annAddBtn" class="secondary compact">추가</button>
+      </div>
+      <span id="annStatus" style="font-size:12.5px;margin-left:2px"></span>
+      <div id="annAdminList" style="margin-top:12px"></div>
     </section>
 
     <section class="settings-card">
@@ -382,7 +397,7 @@
               </div>
               <div class="ide-panel-body">
                 <pre id="ceOut" class="ide-pane on">▶ 실행(또는 Ctrl/⌘+Enter)을 누르면 결과가 여기에 표시됩니다.</pre>
-                <iframe id="ceFrame" class="ide-pane" title="미리보기"></iframe>
+                <iframe id="ceFrame" class="ide-pane" title="미리보기" sandbox="allow-scripts allow-forms allow-popups allow-modals"></iframe>
                 <div id="ceAi" class="ide-pane">
                   <div class="ide-ai-row">
                     <select id="caModel" title="AI 모델(무료/유료)"></select>
@@ -497,6 +512,10 @@
         if (!m) return "";
         if (m.indexOf("opus") >= 0) return "Opus";
         if (m.indexOf("sonnet") >= 0) return "Sonnet";
+        if (m === "gpt-5.4-mini") return "GPT mini";
+        if (m === "gpt-5.4") return "GPT-5.4";
+        if (m === "gpt-5.5") return "GPT-5.5";
+        if (m.indexOf("gpt") >= 0) return "GPT";
         return m;
       }
       function reportAccessLabel(blocked) {
@@ -631,7 +650,10 @@
             "이 사용자가 쓸 수 있는 모델을 제한합니다.\n\n" +
               "1 = 전체 허용 (사용자가 선택)\n" +
               "2 = Opus만 (항상 Opus 4.8)\n" +
-              "3 = Sonnet만 (항상 Sonnet 4.6)\n\n" +
+              "3 = Sonnet만 (항상 Sonnet 4.6)\n" +
+              "4 = GPT-5.5만\n" +
+              "5 = GPT-5.4만\n" +
+              "6 = GPT-5.4 mini만\n\n" +
               "번호 입력:",
             "1",
           );
@@ -640,9 +662,12 @@
             1: "",
             2: "claude-opus-4-8",
             3: "claude-sonnet-4-6",
+            4: "gpt-5.5",
+            5: "gpt-5.4",
+            6: "gpt-5.4-mini",
           };
           const key = String(input).trim();
-          if (!(key in map)) return alert("1, 2, 3 중 하나를 입력하세요.");
+          if (!(key in map)) return alert("1 ~ 6 중 하나를 입력하세요.");
           await patchUser(id, { restrictedModel: map[key] });
           loadUsers();
         } else if (act === "reports") {
@@ -981,10 +1006,70 @@
 
       document.getElementById("refreshBeta").addEventListener("click", loadBeta);
 
+      // ── 공지사항(상단 티커) 관리 ──────────────────────────────────────
+      async function loadAnn() {
+        const box = document.getElementById("annAdminList");
+        if (!box) return;
+        box.innerHTML = '<span class="hint">불러오는 중…</span>';
+        try {
+          const r = await fetch("/api/announcements/all");
+          const d = await r.json();
+          if (!r.ok) throw new Error(d.error || "오류");
+          const list = d.announcements || [];
+          const note = d.store === "memory" ? ' <span class="hint">· 임시 저장(재시작 시 초기화 — announcements 테이블 SQL 적용 시 영구 저장)</span>' : "";
+          if (!list.length) { box.innerHTML = '<span class="hint">등록된 공지가 없습니다.' + note + "</span>"; return; }
+          box.innerHTML =
+            "<div style='font-size:12px;color:#94a3b8;margin-bottom:6px'>총 " + list.length + "개" + note + "</div>" +
+            list.map((a) =>
+              "<div style='display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 0;border-bottom:1px solid #f1f4fb'>" +
+                "<span style='font-size:11px;font-weight:700;color:#2950e6;background:#eef2ff;border-radius:999px;padding:1px 8px'>" + escape(a.category || "공지") + "</span>" +
+                "<span style='flex:1;min-width:140px;" + (a.active ? "" : "opacity:.45;text-decoration:line-through") + "'>" + escape(a.title) + "</span>" +
+                (a.link ? "<a href='" + escape(a.link) + "' target='_blank' style='font-size:12px'>링크</a>" : "") +
+                "<button class='secondary compact ann-toggle' data-id='" + escape(String(a.id)) + "' data-active='" + (a.active ? "1" : "0") + "'>" + (a.active ? "비활성화" : "활성화") + "</button>" +
+                "<button class='secondary compact ann-del' data-id='" + escape(String(a.id)) + "' style='color:#dc2626'>삭제</button>" +
+              "</div>"
+            ).join("");
+          box.querySelectorAll(".ann-toggle").forEach((b) => b.addEventListener("click", async () => {
+            await fetch("/api/announcements/" + encodeURIComponent(b.dataset.id), { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active: b.dataset.active !== "1" }) });
+            loadAnn();
+          }));
+          box.querySelectorAll(".ann-del").forEach((b) => b.addEventListener("click", async () => {
+            if (!confirm("이 공지를 삭제할까요?")) return;
+            await fetch("/api/announcements/" + encodeURIComponent(b.dataset.id), { method: "DELETE" });
+            loadAnn();
+          }));
+        } catch (e) {
+          box.innerHTML = "<span class='hint' style='color:#dc2626'>" + escape(e.message) + "</span>";
+        }
+      }
+      (function () {
+        const btn = document.getElementById("annAddBtn");
+        if (!btn) return;
+        btn.addEventListener("click", async () => {
+          const title = document.getElementById("annTitle").value.trim();
+          const category = document.getElementById("annCat").value.trim();
+          const link = document.getElementById("annLink").value.trim();
+          const st = document.getElementById("annStatus");
+          if (!title) { st.style.color = "#dc2626"; st.textContent = "제목을 입력하세요."; return; }
+          btn.disabled = true; st.style.color = "#666"; st.textContent = "등록 중…";
+          try {
+            const r = await fetch("/api/announcements", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title, category, link }) });
+            const d = await r.json();
+            if (!r.ok) throw new Error(d.error || "오류");
+            document.getElementById("annTitle").value = "";
+            document.getElementById("annLink").value = "";
+            st.style.color = "green"; st.textContent = "등록 완료" + (d.store === "memory" ? " (임시 저장)" : "");
+            loadAnn();
+          } catch (e) { st.style.color = "#dc2626"; st.textContent = e.message; }
+          btn.disabled = false;
+        });
+      })();
+
       // 초기 로드
       loadUsers();
       loadLogs();
       loadBeta();
+      loadAnn();
     </script>
       <script src="/chat-widget.js" defer></script>
     <script>
@@ -1216,6 +1301,7 @@
       (function () {
         // ── 섹션 탭(한 번에 하나씩) ──
         var TABMAP = {
+          "공지사항": "announce",
           "AI 관리자 보조": "ai",
           "사용자 추가": "users",
           "사용자 목록": "users",

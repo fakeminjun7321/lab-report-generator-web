@@ -216,7 +216,13 @@ def make_template_title_header_first_page_only(doc):
 
 
 def move_template_title_header_to_first_body_anchor(doc):
-    """Render the template title box only once by anchoring it in body text.
+    """⚠️ 사용 금지(DEAD CODE) — 호출하지 말 것.
+    이 함수는 제목 박스를 header 에서 body 로 옮긴다. CLAUDE.md "HWPX 생성 규칙"과
+    docs/phys-result-pipeline.md §19.3 가 명시적으로 금지한 동작이며, 과거 macOS/
+    Windows 한컴에서 파일이 열리지 않는 회귀를 일으켰다. 제목 반복 문제는
+    make_template_title_header_first_page_only() 로 해결한다. 참고용으로만 남겨 둔다.
+
+    Render the template title box only once by anchoring it in body text.
 
     HWPX headers support odd/even/both page types, but not a reliable
     first-page-only header. Hancom may therefore repeat the template title box
@@ -309,7 +315,12 @@ def _assign_fresh_ids(root, subtree):
 
 
 def move_template_title_header_to_body(doc):
-    """Keep the template title box on page 1 without repeating it as a header."""
+    """⚠️ 사용 금지(DEAD CODE) — 호출하지 말 것.
+    header subList 를 top-level body 로 옮기는 동작은 CLAUDE.md "HWPX 생성 규칙"과
+    docs/phys-result-pipeline.md §19.3 가 금지한다(한컴 열림 실패 회귀). 제목 반복은
+    make_template_title_header_first_page_only() 로 처리한다.
+
+    Keep the template title box on page 1 without repeating it as a header."""
     moved = False
     for sec in getattr(doc.oxml, "sections", []):
         element = getattr(sec, "element", None)
@@ -409,13 +420,17 @@ SUBSCRIPT_TO_LATEX = str.maketrans({
     "₊": "+",
     "₋": "-",
 })
+# '|' 는 절댓값(|I_pivot - I_cm|), '%' 는 %Diff(Capstone 계산 column) 표기 —
+# 빠지면 '%Diff = |…|/…' 식이 'Diff =' 까지만 잡혀 파편 수식 + raw 파이프
+# 산문으로 갈라진다. 시작 문자에도 두 글자를 허용해 식 전체를 한 덩어리로
+# 잡는다(홀수 파이프 가드는 is_probable_physics_formula 쪽).
 FORMULA_CHAR_CLASS = (
     r"A-Za-z0-9"
     r"αβγδθλμπρστφωΩΔΣ"
-    r"_\{\}\^\*\s\+\-=−–—≈≃≤≥<>/\\\(\)\[\]\.,"
+    r"_\{\}\^\*\s\+\-=−–—≈≃≤≥<>/\\\(\)\[\]\.,\|"
     r"·×√½°%′'⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻₀₁₂₃₄₅₆₇₈₉₊₋\u0307\u0308"
 )
-FORMULA_START_CLASS = r"A-Za-z0-9αβγδθλμπρστφωΩΔΣ\*\(\{"
+FORMULA_START_CLASS = r"A-Za-z0-9αβγδθλμπρστφωΩΔΣ\*\(\{%\|"
 INLINE_FORMULA_RE = re.compile(
     rf"(?<![A-Za-z0-9_])([{FORMULA_START_CLASS}][{FORMULA_CHAR_CLASS}]{{0,120}}?"
     rf"(?:=|≈|≃|≤|≥)"
@@ -437,18 +452,52 @@ PLAIN_SUBSCRIPTS = str.maketrans({
 })
 
 
-def normalize_plain_physics_notation(text):
-    s = str(text or "")
-    s = re.sub(
+def _subscript_digit_notation(text):
+    """x_2 → x₂ (유니코드 아래첨자) — 산문·수식 승격 양쪽에서 안전한 표기."""
+    return re.sub(
         r"([A-Za-zαβγδθλμπρστφωΩΔΣ])_([0-9])",
         lambda m: f"{m.group(1)}{m.group(2).translate(PLAIN_SUBSCRIPTS)}",
-        s,
+        str(text or ""),
     )
+
+
+def _flatten_label_subscripts(text):
+    """수식으로 승격되지 '않은' 산문 속 _max/_cm/_pivot 라벨 평탄화.
+
+    수식 승격 경로에서는 호출하면 안 된다 — 평탄화된 'Icm' 은 승격 시
+    아래첨자 의도를 잃는다(I_{"cm"} 복원 불가). _promote_plain_physics_segment
+    가 승격을 끝낸 뒤 마커 밖 산문에만 적용한다.
+    """
+    s = str(text or "")
     s = re.sub(r"\|([A-Za-zαβγδθλμπρστφωΩΔΣ]+)\|_max", r"|\1|max", s)
     s = re.sub(r"\b([A-Za-zαβγδθλμπρστφωΩΔΣ]+)_max\b", r"\1max", s)
     s = re.sub(r"\b([A-Za-zαβγδθλμπρστφωΩΔΣ]+)_cm\b", r"\1cm", s)
     s = re.sub(r"\b([A-Za-zαβγδθλμπρστφωΩΔΣ]+)_pivot\b", r"\1pivot", s)
     return s
+
+
+def _flatten_labels_outside_markers(text):
+    """{{EQ*:...}} 마커 밖 산문에만 _flatten_label_subscripts 를 적용한다."""
+    s = str(text or "")
+    if "{{EQ" not in s:
+        return _flatten_label_subscripts(s)
+    spans = pre.find_equation_spans(s)
+    if not spans:
+        # 파손 마커 추정 — 안전하게 그대로 둔다.
+        return s
+    out = []
+    pos = 0
+    for start, end, _kind, _body in spans:
+        out.append(_flatten_label_subscripts(s[pos:start]))
+        out.append(s[start:end])
+        pos = end
+    out.append(_flatten_label_subscripts(s[pos:]))
+    return "".join(out)
+
+
+def normalize_plain_physics_notation(text):
+    # 하위 호환 별칭 — 승격 파이프라인은 두 단계를 분리해 쓴다(위 docstring).
+    return _flatten_label_subscripts(_subscript_digit_notation(text))
 
 
 def convert_radicals(expr):
@@ -562,6 +611,10 @@ def rich_formula_to_latex(expr):
     expr = expr.replace("≤", r" \leq ").replace("≥", r" \geq ")
     expr = expr.replace("½", r"\frac{1}{2}")
     expr = unicode_scripts_to_latex(expr)
+    # 중괄호 없는 다글자 아래첨자(ω_max, I_cm, I_pivot)를 LaTeX 정식 표기로 —
+    # 이렇게 해야 변환 엔진의 quote_textual_subscripts 경로(I_{"cm"})를 타서
+    # 아래첨자 의도가 보존된다. 이미 braced(_{…})면 그대로 둔다.
+    expr = re.sub(r"_([A-Za-z]{2,})\b", r"_{\1}", expr)
     expr = convert_radicals(expr)
     for greek, latex in GREEK_TO_LATEX.items():
         expr = expr.replace(greek, f" {latex} ")
@@ -604,9 +657,18 @@ def is_probable_physics_formula(expr):
         return False
     if re.search(r"[가-힣]", clean):
         return False
+    # 영어 산문 가드 — 'where R = 8.314 J/mol K is the gas constant' 같은
+    # 영문 법칙 인용 문장이 '=' 를 포함한다는 이유로 통째로 수식 승격되는
+    # 것을 막는다(chem-pre looks_like_standalone_equation 과 같은 기준).
+    if pre.count_english_prose_stopwords(clean) >= 2:
+        return False
     if not re.search(r"[A-Za-zαβγδθλμπρστφωΩΔΣ]", clean):
         return False
     if not re.search(r"=|≈|≃|≤|≥", clean):
+        return False
+    # 절댓값 막대는 항상 짝수로 나온다 — 홀수 '|' 는 표/구분자 파편이 식에
+    # 섞인 신호이므로 산문으로 남긴다(파이프가 수식 글자로 승격되는 오탐 방지).
+    if clean.count("|") % 2:
         return False
     if is_trivial_measurement(clean):
         return False
@@ -634,20 +696,43 @@ def trim_formula_edges(core, trailing):
     return core, trailing
 
 
-def normalize_physics_equation_markers(text):
-    """Promote inline physics formulas to native Hancom equation placeholders.
+# 평문에 흘러나온 한컴 수식 스크립트 조각 구조(rescue) — 구현은 공통 베이스
+# (chem-pre/hwpx-gen.py)로 이동했다. 화학 산문 경로에서도 같은 구조가 필요해
+# 공유 모듈에 두고, 여기는 하위 호환용 얇은 별칭만 남긴다.
+_UNI_SUP_MAP = pre._UNI_SUP_MAP
+_UNI_SUB_MAP = pre._UNI_SUB_MAP
+_RESCUE_BRACED = pre._RESCUE_BRACED
+_RESCUE_WORD = pre._RESCUE_WORD
+_HWP_SCRIPT_CORE_RE = pre._HWP_SCRIPT_CORE_RE
+_convert_unicode_scripts_to_hwp = pre._convert_unicode_scripts_to_hwp
+rescue_inline_hwp_script = pre.rescue_inline_hwp_script
 
-    The shared chemistry HWPX generator already converts explicit
-    {{EQ:...}} markers and standalone formula lines. Physics result prose often
-    contains inline equations such as `I_{pivot} = mgdT^{2}/(4π^{2})`, so we
-    wrap only the formula span and leave the surrounding Korean prose intact.
+
+def _promote_plain_physics_segment(segment):
+    """마커가 없는 평문 구간 하나에 물리 수식 승격 처리를 적용한다.
+
+    normalize_physics_equation_markers 가 마커 구간을 보호한 뒤 그 사이의
+    평문 구간만 이 함수로 넘긴다(마커 내부 재가공 방지).
     """
-    s = str(text or "")
+    s = str(segment or "")
+    # 파손/비정형 마커 잔재("{{EQ:" 미폐쇄 등)가 섞인 구간은 건드리지 않는다(방어).
     if "{{EQ" in s:
         return s
-    s = normalize_plain_physics_notation(s)
+    # 라벨 평탄화(_max→max)는 승격 '뒤' 마커 밖 산문에만 — 먼저 평탄화하면
+    # ω_max 가 'ωmax' 로 붙은 채 수식이 되어 아래첨자 의도를 잃는다.
+    s = _subscript_digit_notation(s)
+    # 모델이 평문에 흘린 한컴 스크립트 조각({1} over {2} …)을 먼저 구조한다.
+    # 구조됐으면 이 구간의 마커 처리는 끝(마커 내부 재가공 방지).
+    s = rescue_inline_hwp_script(s)
+    if "{{EQ" in s:
+        return _flatten_labels_outside_markers(s)
+
+    # URL 안의 "watch?v=Q10..." 같은 쿼리스트링이 수식으로 오인돼 잘리는 사고 방지.
+    url_spans = [m.span() for m in re.finditer(r"https?://\S+|www\.\S+", s)]
 
     def repl(match):
+        if any(a <= match.start() < b for a, b in url_spans):
+            return match.group(0)
         raw = match.group(1)
         leading = re.match(r"^\s*", raw).group(0)
         trailing = re.search(r"\s*$", raw).group(0)
@@ -666,7 +751,40 @@ def normalize_physics_equation_markers(text):
             return raw
         return f"{leading}{{{{EQ-LATEX:{latex}}}}}{trailing}"
 
-    return INLINE_FORMULA_RE.sub(repl, s)
+    return _flatten_labels_outside_markers(INLINE_FORMULA_RE.sub(repl, s))
+
+
+def normalize_physics_equation_markers(text):
+    """Promote inline physics formulas to native Hancom equation placeholders.
+
+    The shared chemistry HWPX generator already converts explicit
+    {{EQ:...}} markers and standalone formula lines. Physics result prose often
+    contains inline equations such as `I_{pivot} = mgdT^{2}/(4π^{2})`, so we
+    wrap only the formula span and leave the surrounding Korean prose intact.
+
+    정상 마커가 이미 있는 단락도 통째로 건너뛰지 않는다 — 마커 구간은
+    pre.find_equation_spans 로 보호하고, 그 사이 평문 구간에 남은 raw 스크립트
+    조각/인라인 수식만 따로 승격한다(마커와 조각 혼재 단락 잔존 방지).
+    """
+    s = str(text or "")
+    if "{{EQ" not in s:
+        return _promote_plain_physics_segment(s)
+
+    spans = pre.find_equation_spans(s)
+    if not spans:
+        # "{{EQ"는 있으나 정상 마커 형태가 아님(파손 마커 등) — 안전하게 그대로 둔다.
+        return s
+
+    out = []
+    pos = 0
+    for start, end, _kind, _body in spans:
+        if start > pos:
+            out.append(_promote_plain_physics_segment(s[pos:start]))
+        out.append(s[start:end])
+        pos = end
+    if pos < len(s):
+        out.append(_promote_plain_physics_segment(s[pos:]))
+    return "".join(out)
 
 
 def add_para_to(doc, target, text, *, base_size=pre.SIZE_BODY, bold=False,
@@ -985,17 +1103,21 @@ def build_header(doc, content):
     )
 
 
-def add_photo_blocks(doc, photo_indices, photos, fig_counter, caption_prefix, target=None):
+def add_photo_blocks(doc, photo_indices, photos, fig_counter, caption_prefix, target=None, photo_captions=None):
     target = target or doc
+    caps = photo_captions if isinstance(photo_captions, list) else []
     selected = []
-    for idx in as_list(photo_indices):
+    for pos, idx in enumerate(as_list(photo_indices)):
         try:
             photo = photos[int(idx)]
         except Exception:
             continue
         blob = decode_base64(photo.get("data_base64"))
         if blob:
-            selected.append((photo, blob))
+            per = caps[pos].strip() if pos < len(caps) and isinstance(caps[pos], str) else ""
+            selected.append((photo, blob, per))
+    multiple = len(selected) > 1
+    gpos = -1
     for start in range(0, len(selected), 3):
         group = selected[start:start + 3]
         if not group:
@@ -1011,10 +1133,18 @@ def add_photo_blocks(doc, photo_indices, photos, fig_counter, caption_prefix, ta
         image_max_width = max(col_width - 540, 3000)
         image_max_height = 7500 if len(group) >= 3 else 9900
         captions = []
-        for col, (photo, blob) in enumerate(group):
+        for col, (photo, blob, per) in enumerate(group):
+            gpos += 1
             fmt = image_format(photo.get("name"), photo.get("mimetype"), blob)
             fig_counter["value"] += 1
-            caption = f"[그림 {fig_counter['value']}] {caption_prefix or '실험 사진'}"
+            # 사진별 캡션 우선. 없으면 여러 장일 땐 라벨을 첫 사진에만 달아 중복 방지.
+            if per:
+                desc = per
+            elif multiple:
+                desc = (caption_prefix or "실험 사진") if gpos == 0 else ""
+            else:
+                desc = caption_prefix or "실험 사진"
+            caption = f"[그림 {fig_counter['value']}] {desc}".rstrip()
             captions.append(caption)
 
             img_cell = table.cell(0, col)
@@ -1098,7 +1228,7 @@ def build_results(doc, content, target=None, include_heading=True):
     add_heading_to(doc, target, "1.1 실험 장치 및 세팅", size=pre.SIZE_HEADING, space_after=pre.SPACE_BODY)
     if setup.get("description"):
         add_para_to(doc, target, setup.get("description"), indent_left=pre.INDENT_5MM)
-    add_photo_blocks(doc, setup.get("photo_indices"), photos, fig_counter, "실험 장치", target=target)
+    add_photo_blocks(doc, setup.get("photo_indices"), photos, fig_counter, "실험 장치", target=target, photo_captions=setup.get("photo_captions"))
 
     for idx, exp in enumerate(as_list(content.get("experiments")), 1):
         subnum = f"1.{idx + 1}"
@@ -1130,7 +1260,7 @@ def build_results(doc, content, target=None, include_heading=True):
         if exp.get("analysis"):
             add_para_to(doc, target, exp.get("analysis"), indent_left=pre.INDENT_5MM)
 
-        add_photo_blocks(doc, exp.get("photo_indices"), photos, fig_counter, title, target=target)
+        add_photo_blocks(doc, exp.get("photo_indices"), photos, fig_counter, title, target=target, photo_captions=exp.get("photo_captions"))
 
 
 def add_conclusion_block(doc, target, label, value):
@@ -1168,6 +1298,26 @@ def build_conclusion(doc, content, target=None, include_heading=True):
         "▶ 물리적 고찰",
         conclusion.get("physical_meaning") or conclusion.get("theory_connection"),
     )
+
+
+def build_additional_investigations(doc, content, target=None):
+    """선택적 '추가 실험 및 의문점 해결' 섹션 (additional_investigations[])."""
+    target = target or doc
+    items = [
+        it
+        for it in as_list(content.get("additional_investigations"))
+        if isinstance(it, dict) and (it.get("title") or it.get("body"))
+    ]
+    if not items:
+        return
+    add_para_to(doc, target, "▶ 추가 실험 및 의문점 해결", base_size=pre.SIZE_HEADING, bold=True, space_after=240)
+    markers = ["가", "나", "다", "라", "마"]
+    for i, it in enumerate(items):
+        if it.get("title"):
+            label = markers[i] if i < len(markers) else str(i + 1)
+            add_para_to(doc, target, f"{label}. {it.get('title')}", bold=True, space_after=120)
+        if it.get("body"):
+            add_para_to(doc, target, str(it.get("body")), space_after=360, indent_left=pre.INDENT_5MM)
 
 
 def collect_preview_text(content):
@@ -1233,12 +1383,13 @@ def generate_hwpx(content):
         # fonts are preserved.
         pre.apply_body_font(
             doc,
-            pre.normalize_font_face(content.get("font_face") or content.get("__fontFace")),
+            pre.resolve_font_face(content),
         )
         if result_cell is not None and conclusion_cell is not None:
             clear_cell(result_cell)
             clear_cell(conclusion_cell)
             build_results(doc, content, target=result_cell, include_heading=False)
+            build_additional_investigations(doc, content, target=result_cell)
             build_conclusion(doc, content, target=conclusion_cell, include_heading=False)
             return doc
         clear_template_body(doc)
@@ -1248,10 +1399,11 @@ def generate_hwpx(content):
         apply_phys_page_layout(doc)
         pre.apply_default_font(
             doc,
-            pre.normalize_font_face(content.get("font_face") or content.get("__fontFace")),
+            pre.resolve_font_face(content),
         )
         build_header(doc, content)
     build_results(doc, content)
+    build_additional_investigations(doc, content)
     build_conclusion(doc, content)
     if not using_template:
         add_phys_page_number_to_footer(doc)

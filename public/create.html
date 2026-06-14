@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>창작 — AI로 만들고 공유하기</title>
+    <style>
+      :root { --bg:#f6f7fb; --card:#fff; --bd:#e3e6ef; --ink:#1c2333; --mut:#6b7280; --acc:#3b5bdb; --accd:#2f49b0; }
+      * { box-sizing: border-box; }
+      body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Apple SD Gothic Neo","맑은 고딕",sans-serif; background:var(--bg); color:var(--ink); }
+      header { display:flex; align-items:center; gap:14px; padding:14px 20px; background:var(--card); border-bottom:1px solid var(--bd); position:sticky; top:0; z-index:5; }
+      header .brand { font-weight:800; font-size:17px; text-decoration:none; color:var(--ink); }
+      header nav { margin-left:auto; display:flex; gap:14px; align-items:center; }
+      header nav a { color:var(--mut); text-decoration:none; font-size:14px; }
+      header nav a.on { color:var(--acc); font-weight:700; }
+      .container { max-width:1200px; margin:0 auto; padding:18px 16px 60px; }
+      .card { background:var(--card); border:1px solid var(--bd); border-radius:14px; padding:16px; }
+      button { background:var(--acc); color:#fff; border:0; border-radius:8px; padding:9px 14px; font:inherit; font-weight:600; cursor:pointer; }
+      button:hover { background:var(--accd); }
+      button.sec { background:#eef1fb; color:var(--accd); }
+      button.ghost { background:transparent; color:var(--mut); border:1px solid var(--bd); }
+      .muted { color:var(--mut); font-size:13px; }
+      .gallery { display:grid; grid-template-columns: repeat(auto-fill, minmax(240px,1fr)); gap:14px; }
+      .g-card { background:var(--card); border:1px solid var(--bd); border-radius:14px; overflow:hidden; text-decoration:none; color:inherit; transition:transform .12s, box-shadow .12s; display:flex; flex-direction:column; }
+      .g-card:hover { transform:translateY(-3px); box-shadow:0 10px 24px #1c233314; }
+      .g-thumb { height:150px; border-bottom:1px solid var(--bd); background:#fafbff; overflow:hidden; position:relative; }
+      .g-thumb iframe { border:0; width:200%; height:300px; transform:scale(.5); transform-origin:top left; pointer-events:none; background:#fff; }
+      .g-meta { padding:10px 12px; }
+      .g-meta .t { font-weight:700; font-size:14px; margin-bottom:3px; }
+      .g-meta .b { color:var(--mut); font-size:12px; }
+      .secthead { display:flex; align-items:center; gap:10px; margin:22px 0 12px; }
+      .secthead h2 { font-size:16px; margin:0; }
+      .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+      .notice { background:#eef1fb; border:1px solid #d7defb; color:#33408a; border-radius:10px; padding:12px 14px; font-size:13.5px; margin-bottom:20px; }
+      .create-intro { margin:6px 0 18px; }
+      .create-intro h1 { margin:0 0 6px; font-size:28px; letter-spacing:-0.02em; }
+      .create-intro p { margin:0; color:var(--mut); font-size:14px; line-height:1.6; }
+      .empty { border:1px dashed var(--bd); border-radius:14px; padding:18px 16px; background:#fafbff; color:var(--mut); font-size:14px; }
+      .empty strong { display:block; color:var(--ink); margin-bottom:4px; }
+      .gallery > .empty { grid-column:1 / -1; }
+      .myrow { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+      .myrow button { padding:4px 9px; font-size:12px; font-weight:500; }
+      .item { border:1px solid var(--bd); border-radius:8px; padding:8px 10px; font-size:13px; margin-top:8px; background:var(--card); }
+      .pill { display:inline-block; font-size:11px; padding:1px 7px; border-radius:99px; background:#eef1fb; color:var(--accd); }
+      .pill.priv { background:#fdeaea; color:#b42318; }
+      /* 스튜디오 런처 히어로 */
+      .launch { background:linear-gradient(135deg,#3b5bdb,#6f86ff); color:#fff; border-radius:16px; padding:22px 22px; display:flex; align-items:center; gap:18px; flex-wrap:wrap; }
+      .launch .lt { flex:1; min-width:220px; }
+      .launch h1 { margin:0 0 4px; font-size:22px; }
+      .launch p { margin:0; opacity:.92; font-size:14px; line-height:1.5; }
+      .launch .go { background:#fff; color:var(--accd); font-weight:800; font-size:15px; padding:12px 20px; border-radius:10px; text-decoration:none; white-space:nowrap; }
+      .launch .go:hover { background:#eef1ff; }
+      select { padding:8px 10px; border:1px solid var(--bd); border-radius:8px; font:inherit; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <a class="brand" href="/">Quilo</a>
+      <nav>
+        <a href="/">메인</a>
+        <a href="/community.html">커뮤니티</a>
+        <a href="/create.html" class="on">창작</a>
+      </nav>
+    </header>
+
+    <div class="container">
+      <section class="create-intro">
+        <h1>창작 갤러리</h1>
+        <p>스튜디오로 만든 웹앱과 도구를 모아 보는 공간입니다. 베타 권한이 있으면 직접 만들고, 없으면 공개 갤러리를 둘러볼 수 있습니다.</p>
+      </section>
+
+      <!-- 스튜디오 런처 (만들기 권한 있을 때) -->
+      <a id="launch" class="launch" href="/studio.html" style="display:none;text-decoration:none">
+        <div class="lt">
+          <h1>✨ 스튜디오</h1>
+          <p>대화하듯 AI에게 말하면 웹앱·위젯·도구를 만들어 줘요. 미리보기를 보며 "더 예쁘게", "다크모드로" 처럼 고쳐 나가세요.</p>
+        </div>
+        <span class="go">스튜디오에서 만들기 →</span>
+      </a>
+
+      <!-- 비베타/비로그인 안내 -->
+      <div id="betaNotice" class="notice" style="display:none">
+        🔒 <b>만들기</b>는 현재 <b>베타 사용자</b>에게만 열려 있어요. 아래 갤러리는 누구나 구경할 수 있습니다. 베타 참여를 원하면 관리자에게 요청하세요.
+      </div>
+
+      <!-- 내 창작 (관리) -->
+      <div id="mineWrap" style="display:none">
+        <div class="secthead"><h2>🗂 내 창작</h2><span class="muted" id="whoami"></span></div>
+        <div id="mylist"><div class="empty"><strong>내 창작을 불러오는 중입니다.</strong>잠시만 기다려 주세요.</div></div>
+      </div>
+
+      <!-- 갤러리 (모두 공개) -->
+      <div class="secthead"><h2>🌐 모두의 창작</h2><span class="muted" id="galcount"></span>
+        <select id="sort" style="margin-left:auto"><option value="new">최신순</option><option value="likes">인기순(좋아요)</option><option value="views">조회순</option></select>
+      </div>
+      <div id="chips" class="row" style="margin-bottom:12px"></div>
+      <div class="gallery" id="gallery"><div class="empty"><strong>갤러리를 불러오는 중입니다.</strong>잠시만 기다려 주세요.</div></div>
+    </div>
+
+    <!-- 댓글 모달 -->
+    <div id="cmtModal" style="display:none;position:fixed;inset:0;background:#0008;z-index:50;align-items:center;justify-content:center;padding:16px">
+      <div class="card" style="width:min(520px,100%);max-height:84vh;display:flex;flex-direction:column">
+        <div class="row" style="justify-content:space-between;align-items:center">
+          <b id="cmtTitle">💬 댓글</b>
+          <button id="cmtClose" class="ghost" style="padding:3px 10px">✕</button>
+        </div>
+        <input type="hidden" id="cmtSlug" />
+        <div id="cmtList" style="flex:1;overflow:auto;margin:10px 0;min-height:120px;max-height:46vh"></div>
+        <div class="row" style="gap:8px">
+          <input id="cmtText" placeholder="댓글을 입력하세요 (로그인 필요)" maxlength="1000" style="flex:1;padding:8px 10px;border:1px solid var(--bd);border-radius:8px;font:inherit" />
+          <button id="cmtSend">등록</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      let galItems = [], curCat = "전체", canCreate = false;
+      const CATS = ["학습도구", "게임", "위젯", "계산기", "데이터/차트", "이미지", "기타"];
+
+      async function api(path, opts) {
+        const r = await fetch(path, { credentials: "same-origin", headers: { "Content-Type": "application/json" }, ...opts });
+        let j = null; try { j = await r.json(); } catch {}
+        if (!r.ok) { const e = new Error((j && j.error) || r.status); e.status = r.status; throw e; }
+        return j;
+      }
+      function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,(c)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+      async function init() {
+        try {
+          const b = await api("/api/me/beta");
+          canCreate = !!b.admin || (Array.isArray(b.features) && b.features.includes("create"));
+          if (b.admin) $("whoami").textContent = "· 관리자";
+        } catch (e) { canCreate = false; }
+        if (canCreate) { $("launch").style.display = "flex"; $("mineWrap").style.display = "block"; loadMine(); }
+        else { $("betaNotice").style.display = "block"; }
+        loadGallery();
+      }
+
+      async function loadMine(){
+        try{
+          const j=await api("/api/artifacts");
+          const a=j.artifacts||[];
+          $("mylist").innerHTML = a.length ? (j.persistent?"":`<div class="muted">임시저장 상태</div>`) + a.map((x)=>`
+            <div class="item"><b>${esc(x.title)}</b> <span class="pill ${x.is_public?"":"priv"}">${x.is_public?"공개":"비공개"}</span>
+            <div class="myrow"><a href="/p/${encodeURIComponent(x.slug)}" target="_blank"><button class="ghost">열기</button></a>
+            <a href="/studio.html?edit=${encodeURIComponent(x.slug)}"><button class="sec">수정</button></a>
+            <button class="ghost" data-del="${esc(x.id)}">삭제</button></div></div>`).join("")
+            : `<div class="empty"><strong>아직 만든 작품이 없습니다.</strong><a href="/studio.html">스튜디오에서 첫 작품 만들기 →</a></div>`;
+          $("mylist").querySelectorAll("[data-del]").forEach((b)=>b.onclick=()=>del(b.dataset.del));
+        }catch{ $("mylist").innerHTML = `<span class="muted">목록을 불러오지 못했어요.</span>`; }
+      }
+      async function del(id){ if(!confirm("삭제할까요?"))return; try{ await api("/api/artifacts/"+encodeURIComponent(id),{method:"DELETE"}); loadMine(); loadGallery(); }catch(e){ alert(e.message);} }
+
+      async function loadGallery(){
+        try{
+          const j=await api("/api/artifacts/gallery");
+          galItems=j.items||[];
+          $("galcount").textContent = galItems.length ? `· ${galItems.length}개` : "";
+          renderChips(); renderGallery();
+        }catch(e){ $("gallery").innerHTML=`<span class="muted">갤러리 오류: ${esc(e.message)}</span>`; }
+      }
+      function renderChips(){
+        const cats=["전체",...CATS.filter((c)=>galItems.some((x)=>(x.category||"기타")===c))];
+        $("chips").innerHTML=cats.map((c)=>`<button class="${c===curCat?'sec':'ghost'}" data-cat="${esc(c)}" style="padding:5px 12px;font-size:13px">${esc(c)}</button>`).join("");
+        $("chips").querySelectorAll("[data-cat]").forEach((b)=>b.onclick=()=>{ curCat=b.dataset.cat; renderChips(); renderGallery(); });
+      }
+      function renderGallery(){
+        let items=galItems.filter((x)=>curCat==="전체"||(x.category||"기타")===curCat);
+        const sort=$("sort").value;
+        if(sort==="likes") items=items.slice().sort((a,b)=>(b.likes||0)-(a.likes||0));
+        else if(sort==="views") items=items.slice().sort((a,b)=>(b.views||0)-(a.views||0));
+        if(!items.length){ $("gallery").innerHTML=`<div class="empty"><strong>아직 공개된 창작물이 없습니다.</strong>필터를 바꾸거나 나중에 다시 확인해 주세요.</div>`; return; }
+        $("gallery").innerHTML = items.map((x)=>`
+          <div class="g-card">
+            <a href="/p/${encodeURIComponent(x.slug)}" target="_blank" style="text-decoration:none;color:inherit">
+              <div class="g-thumb"><iframe loading="lazy" sandbox="allow-scripts" src="/p/${encodeURIComponent(x.slug)}"></iframe></div>
+              <div class="g-meta"><div class="t">${esc(x.title)}${x.forked_from?' <span class="pill">리믹스</span>':''}</div><div class="b">${esc(x.owner||"")} · <span class="pill">${esc(x.category||"기타")}</span> · 👁 ${x.views||0}</div></div>
+            </a>
+            <div class="myrow" style="padding:0 12px 10px">
+              <button class="ghost" data-like="${esc(x.slug)}">❤ <span>${x.likes||0}</span></button>
+              ${canCreate?`<a href="/studio.html?remix=${encodeURIComponent(x.slug)}"><button class="ghost">🔀 리믹스</button></a>`:""}
+              <button class="ghost" data-cmt="${esc(x.slug)}" data-title="${esc(x.title)}">💬</button>
+              <button class="ghost" data-embed="${esc(x.slug)}">📋 임베드</button>
+              <button class="ghost" data-report="${esc(x.slug)}" style="margin-left:auto">🚩</button>
+            </div>
+          </div>`).join("");
+        $("gallery").querySelectorAll("[data-like]").forEach((b)=>b.onclick=()=>like(b.dataset.like,b));
+        $("gallery").querySelectorAll("[data-embed]").forEach((b)=>b.onclick=()=>embed(b.dataset.embed));
+        $("gallery").querySelectorAll("[data-report]").forEach((b)=>b.onclick=()=>report(b.dataset.report));
+        $("gallery").querySelectorAll("[data-cmt]").forEach((b)=>b.onclick=()=>openComments(b.dataset.cmt,b.dataset.title));
+      }
+      // ── 댓글 모달 ──
+      async function openComments(slug,title){
+        $("cmtTitle").textContent="💬 "+(title||"댓글");
+        $("cmtSlug").value=slug; $("cmtList").innerHTML='<span class="muted">불러오는 중…</span>';
+        $("cmtModal").style.display="flex";
+        await loadComments(slug);
+      }
+      async function loadComments(slug){
+        try{
+          const j=await api("/api/artifacts/"+encodeURIComponent(slug)+"/comments");
+          const cs=j.comments||[];
+          $("cmtList").innerHTML = cs.length ? cs.map((c)=>`
+            <div style="padding:8px 0;border-bottom:1px solid var(--bd)">
+              <div style="font-weight:600;font-size:13px">${esc(c.author||"익명")} <span class="muted" style="font-weight:400">· ${esc((c.at||"").slice(0,10))}</span></div>
+              <div style="white-space:pre-wrap;font-size:14px;margin-top:2px">${esc(c.text||"")}</div>
+            </div>`).join("") : '<span class="muted">첫 댓글을 남겨보세요.</span>';
+          $("cmtList").scrollTop=$("cmtList").scrollHeight;
+        }catch(e){ $("cmtList").innerHTML='<span class="muted">불러오지 못했습니다.</span>'; }
+      }
+      async function sendComment(){
+        const slug=$("cmtSlug").value, text=$("cmtText").value.trim();
+        if(!text) return;
+        $("cmtSend").disabled=true;
+        try{
+          await api("/api/artifacts/"+encodeURIComponent(slug)+"/comments",{method:"POST",body:JSON.stringify({text})});
+          $("cmtText").value=""; await loadComments(slug);
+        }catch(e){ alert(/401/.test(e.message)?"로그인 후 댓글을 쓸 수 있어요.":"댓글 오류: "+e.message); }
+        finally{ $("cmtSend").disabled=false; }
+      }
+      async function report(slug){
+        const reason=prompt("신고 사유(선택):"); if(reason===null) return;
+        try{ await api("/api/artifacts/"+encodeURIComponent(slug)+"/report",{method:"POST",body:JSON.stringify({reason})}); alert("신고가 접수되었습니다."); }
+        catch(e){ alert("신고 오류: "+e.message); }
+      }
+      async function like(slug,btn){
+        const liked=JSON.parse(localStorage.getItem("quilo_liked")||"{}");
+        if(liked[slug]){ return; }
+        try{ const j=await api("/api/artifacts/"+encodeURIComponent(slug)+"/like",{method:"POST"});
+          liked[slug]=1; localStorage.setItem("quilo_liked",JSON.stringify(liked));
+          btn.querySelector("span").textContent=j.likes; btn.classList.add("sec");
+        }catch{}
+      }
+      function embed(slug){
+        const code=`<iframe src="${location.origin}/p/${encodeURIComponent(slug)}" style="width:100%;height:600px;border:0"></iframe>`;
+        navigator.clipboard?.writeText(code).then(()=>alert("임베드 코드를 복사했어요:\n\n"+code),()=>prompt("임베드 코드",code));
+      }
+
+      $("sort").onchange=renderGallery;
+      $("cmtClose").onclick=()=>$("cmtModal").style.display="none";
+      $("cmtModal").onclick=(e)=>{ if(e.target===$("cmtModal")) $("cmtModal").style.display="none"; };
+      $("cmtSend").onclick=sendComment;
+      $("cmtText").onkeydown=(e)=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); sendComment(); } };
+      init();
+    </script>
+  </body>
+</html>

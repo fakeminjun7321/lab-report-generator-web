@@ -41,6 +41,11 @@
       .comment .who { color: #64748b; font-size: 12px; }
       .muted { color: #94a3b8; font-size: 13px; }
       .err { color: #dc2626; font-size: 13px; margin: 6px 0; }
+      .cmintro { margin: 8px 0 18px; padding: 12px 0 4px; }
+      .cmintro h1 { margin: 0 0 6px; font-size: 28px; letter-spacing: -0.02em; }
+      .cmintro p { margin: 0; color: #64748b; font-size: 14px; line-height: 1.6; }
+      .cmempty { border: 1px dashed #d7ddf0; border-radius: 12px; padding: 18px 16px; background: #f8faff; color: #64748b; font-size: 14px; }
+      .cmempty strong { display: block; color: #334155; font-size: 15px; margin-bottom: 4px; }
       .pill-filter { display: flex; gap: 6px; margin-bottom: 12px; }
       .pill-filter button { border: 1px solid #d7ddf0; background: none; border-radius: 999px; padding: 4px 12px; font-size: 13px; cursor: pointer; color: #475569; }
       .pill-filter button.active { background: #2950e6; color: #fff; border-color: #2950e6; }
@@ -84,6 +89,11 @@
         <a href="/" class="muted" style="text-decoration:none">← 홈으로</a>
       </div>
 
+      <section class="cmintro">
+        <h1>커뮤니티</h1>
+        <p>기능 요청과 개선 아이디어를 모아 보는 공간입니다. 랩 탭에서는 개발자가 공개한 구현 노트를 확인할 수 있습니다.</p>
+      </section>
+
       <div class="cmtabs">
         <button id="tabSuggest" class="active" onclick="showTab('suggest')">건의 · 기능요청</button>
         <button id="tabLab" onclick="showTab('lab')">랩 (기술 공개)</button>
@@ -113,7 +123,7 @@
           글을 쓰려면 <a href="/">로그인</a>이 필요합니다. (읽기는 누구나 가능)
         </div>
 
-        <div id="postList"><p class="muted">불러오는 중…</p></div>
+        <div id="postList"><div class="cmempty"><strong>게시글을 불러오는 중입니다.</strong>잠시만 기다려 주세요.</div></div>
       </section>
 
       <!-- 랩 -->
@@ -199,13 +209,13 @@
       async function renderLab() {
         const el = document.getElementById("labList");
         if (labLoaded) return;
-        el.innerHTML = '<p class="muted">불러오는 중…</p>';
+        el.innerHTML = '<div class="cmempty"><strong>기술 노트를 불러오는 중입니다.</strong>잠시만 기다려 주세요.</div>';
         try {
           const r = await fetch("/api/lab/entries");
           const d = await r.json();
           if (!r.ok) throw new Error(d.error || "오류");
           const entries = d.entries || [];
-          if (!entries.length) { el.innerHTML = '<p class="muted">아직 공개된 기술 노트가 없습니다.</p>'; return; }
+          if (!entries.length) { el.innerHTML = '<div class="cmempty"><strong>아직 공개된 기술 노트가 없습니다.</strong>새 구현 노트가 올라오면 이곳에 표시됩니다.</div>'; return; }
           el.innerHTML = "";
           entries.forEach((e) => {
             const item = document.createElement("div");
@@ -236,7 +246,7 @@
         item.classList.add("open");
         wrap.style.display = "";
         if (wrap.dataset.loaded) return;
-        wrap.innerHTML = '<p class="muted">불러오는 중…</p>';
+        wrap.innerHTML = '<p class="muted">본문을 불러오는 중…</p>';
         try {
           const r = await fetch("/api/lab/entry/" + encodeURIComponent(id));
           const d = await r.json();
@@ -298,15 +308,15 @@
 
       async function loadPosts() {
         const list = document.getElementById("postList");
-        list.innerHTML = '<p class="muted">불러오는 중…</p>';
+        list.innerHTML = '<div class="cmempty"><strong>게시글을 불러오는 중입니다.</strong>잠시만 기다려 주세요.</div>';
         try {
           const r = await fetch("/api/community/posts" + (curCat ? "?category=" + curCat : ""));
           const d = await r.json();
           if (!r.ok) throw new Error(d.error || "오류");
           if (d.me) me = d.me;
           const posts = d.posts || [];
-          if (!d.storage) { list.innerHTML = '<p class="muted">커뮤니티 저장소가 아직 설정되지 않았습니다.</p>'; return; }
-          if (!posts.length) { list.innerHTML = '<p class="muted">아직 글이 없습니다. 첫 글을 남겨보세요!</p>'; return; }
+          if (!d.storage) { list.innerHTML = '<div class="cmempty"><strong>커뮤니티 저장소가 아직 설정되지 않았습니다.</strong>관리자 설정이 끝나면 글을 볼 수 있습니다.</div>'; return; }
+          if (!posts.length) { list.innerHTML = '<div class="cmempty"><strong>아직 글이 없습니다.</strong>첫 기능 요청이나 건의사항을 남겨보세요.</div>'; return; }
           list.innerHTML = "";
           posts.forEach((p) => list.appendChild(renderPost(p)));
         } catch (e) {

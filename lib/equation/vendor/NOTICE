@@ -1,0 +1,25 @@
+LaTeX → HWP(한컴) 수식 스크립트 변환 엔진
+==========================================
+
+hwip-converter.js 는 아래 오픈소스를 vendor 한 것입니다.
+
+  latex-to-hwp (hwip)
+  Copyright (c) 2026 Shin Mingyu (@minigu5)
+  https://github.com/minigu5/hwip
+  License: Custom License — Non-Commercial & Attribution
+
+라이선스 상태
+- 이 엔진은 "비상업적 사용(Non-Commercial) & 출처 표기(Attribution)" 커스텀
+  라이선스입니다.
+- ✅ 2026-06-10 원저작자(신민규, @minigu5 — 운영자의 지인)로부터 본 서비스
+  (Quilo, 크레딧 운영 포함)에서의 사용 허락을 직접 받았습니다.
+- 출처 표기는 본 NOTICE 와 lib/version-info.js 패치노트의 표기로 충족합니다.
+- 만약 추후 허락이 철회되면 이 vendor 파일을 제거하면 되고, 수식 변환은
+  hwpx_equation_tool.py 의 자체(builtin) 변환기로 자동 폴백됩니다.
+
+적용 위치 (2026-06-10 통합)
+- lib/equation/hwpx_equation_tool.py 가 {{EQ-LATEX}}/{{EQN-LATEX}} 마커를
+  hwip(이 vendor)으로 우선 변환하고, 실패한 식만 builtin 변환기로 폴백합니다.
+- 보고서 HWPX 5종(화학 사전/화학 결과/물리 결과/물리 수행/수학 수행) 공통 적용.
+- 환경변수 EQUATION_ENGINE=builtin 으로 즉시 비활성(롤백) 가능. 기본값 hwip.
+- 회귀 검증 도구: scripts/eq_engine_diff.py (builtin vs hwip 골든셋 비교).

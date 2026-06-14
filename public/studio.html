@@ -1,0 +1,535 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <title>스튜디오 — Quilo 창작</title>
+    <link rel="icon" href="/favicon.ico" />
+    <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0/min/vs/loader.js"></script>
+    <style>
+      :root { --bg:#0f1117; --panel:#161922; --panel2:#1d212c; --bd:#272b38; --ink:#e7e9ef; --mut:#9aa1b4; --acc:#5b7cfa; --accd:#4763e0; --ok:#3fb950; }
+      * { box-sizing:border-box; }
+      html,body { height:100%; margin:0; }
+      body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Apple SD Gothic Neo","맑은 고딕",sans-serif; background:var(--bg); color:var(--ink); overflow:hidden; }
+      a { color:inherit; }
+      .gate { height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; text-align:center; padding:24px; color:var(--mut); }
+      .btn { background:var(--acc); color:#fff; border:0; border-radius:9px; padding:9px 15px; font:inherit; font-weight:600; cursor:pointer; }
+      .btn:hover { background:var(--accd); }
+      .btn.sec { background:#222633; color:#cdd3e6; border:1px solid var(--bd); }
+      .btn.ghost { background:transparent; color:var(--mut); border:1px solid var(--bd); }
+      .btn:disabled { opacity:.5; cursor:not-allowed; }
+
+      .app { display:none; height:100%; flex-direction:column; }
+      .top { display:flex; align-items:center; gap:12px; padding:9px 14px; background:var(--panel); border-bottom:1px solid var(--bd); flex:0 0 auto; }
+      .top .brand { font-weight:800; font-size:15px; text-decoration:none; display:flex; align-items:center; gap:7px; }
+      .top .brand .q { width:24px;height:24px;border-radius:6px;background:var(--acc);color:#fff;display:grid;place-items:center;font-weight:800;font-size:14px; }
+      .top .beta { font-size:10px; background:#222a44; color:#9db1ff; border-radius:99px; padding:1px 7px; }
+      .top .sp { flex:1; }
+      .top select { background:var(--panel2); color:var(--ink); border:1px solid var(--bd); border-radius:8px; font:inherit; font-size:12.5px; padding:6px 8px; max-width:180px; }
+      .top a.nav { color:var(--mut); text-decoration:none; font-size:13px; }
+      .top a.nav:hover { color:var(--ink); }
+
+      .body { flex:1; display:flex; min-height:0; }
+      /* ── 채팅(왼쪽) ── */
+      .chat { width:40%; max-width:480px; min-width:300px; display:flex; flex-direction:column; background:var(--panel); border-right:1px solid var(--bd); }
+      @media (max-width:760px){ .chat{ width:100%; max-width:none; } .stage{ display:none; } .app.showstage .chat{ display:none; } .app.showstage .stage{ display:flex; } }
+      .msgs { flex:1; overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:11px; }
+      .msg { max-width:94%; font-size:13.5px; line-height:1.6; border-radius:13px; padding:9px 12px; word-break:break-word; }
+      .msg.user { align-self:flex-end; background:var(--acc); color:#fff; white-space:pre-wrap; }
+      .msg.ai { align-self:flex-start; background:var(--panel2); border:1px solid var(--bd); }
+      .msg.ai .meta { margin-top:7px; display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
+      .ck { font-size:11px; background:#222a44; color:#9db1ff; border-radius:99px; padding:2px 9px; border:1px solid #2f3a5e; cursor:pointer; }
+      .ck:hover { background:#2a345a; }
+      .ck.cur { background:var(--acc); color:#fff; border-color:var(--acc); }
+      .msg.ai .mdl { font-size:10.5px; color:var(--mut); }
+      .empty { color:var(--mut); padding:6px 2px; }
+      .empty h3 { color:var(--ink); font-size:16px; margin:6px 0 4px; }
+      .tpl { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:12px 0; }
+      .tpl button { text-align:left; background:var(--panel2); border:1px solid var(--bd); color:var(--ink); border-radius:10px; padding:10px 11px; font:inherit; font-size:12.5px; cursor:pointer; line-height:1.4; }
+      .tpl button:hover { border-color:var(--acc); }
+      .tpl button b { display:block; font-size:13px; margin-bottom:2px; }
+      .tpl button span { color:var(--mut); font-size:11.5px; }
+      .chips { display:flex; gap:6px; flex-wrap:wrap; padding:0 12px 8px; }
+      .chips button { background:var(--panel2); border:1px solid var(--bd); color:var(--mut); border-radius:99px; padding:4px 11px; font:inherit; font-size:12px; cursor:pointer; }
+      .chips button:hover:not(:disabled) { color:var(--ink); border-color:var(--acc); }
+      .chips button:disabled { opacity:.4; cursor:not-allowed; }
+      .inwrap { border-top:1px solid var(--bd); padding:10px 12px; flex:0 0 auto; background:var(--panel); }
+      .thumbs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:7px; }
+      .thumbs .t { position:relative; }
+      .thumbs img { width:42px;height:42px;object-fit:cover;border-radius:6px;border:1px solid var(--bd); }
+      .thumbs .rm { position:absolute; top:-6px; right:-6px; width:17px; height:17px; border-radius:50%; background:#b42318; color:#fff; border:0; font-size:11px; line-height:1; cursor:pointer; padding:0; }
+      .inrow { display:flex; gap:8px; align-items:flex-end; }
+      .inrow textarea { flex:1; resize:none; min-height:42px; max-height:160px; background:var(--panel2); color:var(--ink); border:1px solid var(--bd); border-radius:10px; font:inherit; font-size:13.5px; padding:10px 11px; }
+      .inrow .iconbtn { flex:0 0 auto; width:40px; height:40px; border-radius:10px; background:var(--panel2); border:1px solid var(--bd); color:var(--mut); cursor:pointer; font-size:16px; }
+      .inrow .iconbtn:hover { color:var(--ink); }
+      .instatus { font-size:11.5px; color:var(--mut); margin-top:6px; min-height:14px; }
+      .modeseg { display:inline-flex; background:var(--panel2); border:1px solid var(--bd); border-radius:99px; padding:2px; margin-bottom:9px; }
+      .modeseg button { background:none; border:0; color:var(--mut); font:inherit; font-size:12px; padding:5px 13px; border-radius:99px; cursor:pointer; }
+      .modeseg button.on { background:var(--acc); color:#fff; }
+      .msg.ai img { max-width:170px; border-radius:8px; display:block; margin-bottom:6px; }
+
+      /* ── 스테이지(오른쪽) ── */
+      .stage { flex:1; display:flex; flex-direction:column; background:#0b0d12; min-width:0; }
+      .toolbar { display:flex; align-items:center; gap:6px; padding:7px 10px; background:var(--panel); border-bottom:1px solid var(--bd); flex:0 0 auto; flex-wrap:wrap; }
+      .seg { display:inline-flex; background:var(--panel2); border:1px solid var(--bd); border-radius:8px; overflow:hidden; }
+      .seg button { background:none; border:0; color:var(--mut); font:inherit; font-size:12.5px; padding:6px 12px; cursor:pointer; }
+      .seg button.on { background:var(--acc); color:#fff; }
+      .toolbar .tbtn { background:none; border:1px solid var(--bd); color:var(--mut); border-radius:8px; padding:6px 10px; font:inherit; font-size:12.5px; cursor:pointer; }
+      .toolbar .tbtn:hover:not(:disabled) { color:var(--ink); }
+      .toolbar .tbtn:disabled { opacity:.4; cursor:not-allowed; }
+      .toolbar .sp { flex:1; }
+      .stageview { flex:1; min-height:0; position:relative; display:flex; align-items:stretch; justify-content:center; background:#0b0d12; overflow:auto; }
+      .pvhost { width:100%; height:100%; display:flex; justify-content:center; padding:0; }
+      .pvhost.mobile { padding:18px; }
+      #preview { border:0; width:100%; height:100%; background:#fff; }
+      .pvhost.mobile #preview { width:390px; max-width:100%; height:100%; border-radius:18px; box-shadow:0 8px 40px #0008; border:1px solid #222; }
+      #monacoHost { position:absolute; inset:0; display:none; }
+      .stage.codeon #monacoHost { display:block; }
+      .stage.codeon .stageview { display:none; }
+      .placeholder { color:#5b6275; display:flex; align-items:center; justify-content:center; height:100%; width:100%; text-align:center; padding:24px; line-height:1.7; }
+
+      /* ── 게시 모달 ── */
+      .modal { display:none; position:fixed; inset:0; background:#000a; z-index:40; align-items:center; justify-content:center; padding:16px; }
+      .modal.on { display:flex; }
+      .sheet { width:min(440px,100%); background:var(--panel); border:1px solid var(--bd); border-radius:14px; padding:18px; }
+      .sheet h3 { margin:0 0 12px; font-size:16px; }
+      .sheet label { display:block; font-size:12px; color:var(--mut); margin:10px 0 4px; }
+      .sheet input[type=text], .sheet select { width:100%; background:var(--panel2); color:var(--ink); border:1px solid var(--bd); border-radius:8px; font:inherit; padding:8px 10px; }
+      .sheet .rowb { display:flex; align-items:center; justify-content:space-between; margin-top:14px; gap:10px; }
+      .sheet .tog { display:inline-flex; align-items:center; gap:6px; font-size:13px; color:var(--mut); }
+      .pubstatus { font-size:12.5px; color:var(--mut); margin-top:10px; word-break:break-all; }
+      .pubstatus a { color:#9db1ff; }
+      .spin { display:inline-block; width:13px; height:13px; border:2px solid #ffffff55; border-top-color:#fff; border-radius:50%; animation:sp .7s linear infinite; vertical-align:-2px; }
+      .msg.ai .spin { border-color:#5b627555; border-top-color:var(--acc); }
+      @keyframes sp { to { transform:rotate(360deg);} }
+    </style>
+  </head>
+  <body>
+    <div id="gate" class="gate">권한 확인 중…</div>
+
+    <div id="app" class="app">
+      <div class="top">
+        <a class="brand" href="/"><span class="q">Q</span> Studio <span class="beta">베타</span></a>
+        <button class="tbtn" id="toStage" style="display:none">미리보기 ▸</button>
+        <span class="sp"></span>
+        <select id="model" title="AI 모델"></select>
+        <button class="btn" id="openPublish" disabled>게시</button>
+        <a class="nav" href="/create.html">갤러리</a>
+      </div>
+
+      <div class="body">
+        <div class="chat">
+          <div class="msgs" id="msgs"></div>
+          <div class="chips" id="chips"></div>
+          <div class="inwrap">
+            <div class="modeseg" id="modeseg">
+              <button data-mode="app" class="on">💬 앱 만들기</button>
+              <button data-mode="image">🖼 이미지</button>
+            </div>
+            <div class="thumbs" id="thumbs"></div>
+            <div class="inrow">
+              <button class="iconbtn" id="imgBtn" title="이미지 추가(생성·업로드)">🖼</button>
+              <textarea id="prompt" rows="1" placeholder="무엇을 만들까요? (Enter 전송 · Shift+Enter 줄바꿈)"></textarea>
+              <button class="iconbtn" id="sendBtn" title="보내기" style="background:var(--acc);color:#fff;border-color:var(--acc)">↑</button>
+            </div>
+            <div class="instatus" id="instatus"></div>
+          </div>
+        </div>
+
+        <div class="stage" id="stage">
+          <div class="toolbar">
+            <div class="seg" id="tabs">
+              <button data-tab="preview" class="on">미리보기</button>
+              <button data-tab="code">코드</button>
+            </div>
+            <div class="seg" id="devseg">
+              <button data-dev="desktop" class="on" title="데스크탑">💻</button>
+              <button data-dev="mobile" title="모바일">📱</button>
+            </div>
+            <button class="tbtn" id="refresh" title="미리보기 새로고침" disabled>↻</button>
+            <span class="sp"></span>
+            <button class="tbtn" id="undoBtn" title="이전 버전으로" disabled>↶ 되돌리기</button>
+            <button class="tbtn" id="popout" title="새 탭에서 열기" disabled>⤢ 새 탭</button>
+          </div>
+          <div class="stageview">
+            <div class="pvhost" id="pvhost">
+              <iframe id="preview" sandbox="allow-scripts allow-forms allow-popups allow-modals"></iframe>
+            </div>
+          </div>
+          <div id="monacoHost"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 게시 모달 -->
+    <div class="modal" id="pubModal">
+      <div class="sheet">
+        <h3>🚀 게시하기</h3>
+        <label>제목</label>
+        <input type="text" id="pTitle" placeholder="예: 실험 일정 위젯" />
+        <label>주소(slug) — 비우면 자동</label>
+        <input type="text" id="pSlug" placeholder="exp-schedule" />
+        <label>분류</label>
+        <select id="pCat"></select>
+        <div class="rowb">
+          <label class="tog"><input type="checkbox" id="pPublic" checked /> 갤러리에 공개</label>
+          <div>
+            <button class="btn ghost" id="pCancel">취소</button>
+            <button class="btn" id="pDo">게시</button>
+          </div>
+        </div>
+        <div class="pubstatus" id="pubStatus"></div>
+      </div>
+    </div>
+
+    <input type="file" id="imgFile" accept="image/*" hidden />
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+      const CATS = ["학습도구", "게임", "위젯", "계산기", "데이터/차트", "이미지", "기타"];
+      const CHIPS = ["🌙 다크모드로", "✨ 더 예쁘게", "🎞 애니메이션 추가", "📱 모바일 최적화", "🎨 색 바꿔줘", "🔡 글씨 키워줘", "🧩 기능 하나 더"];
+      const TEMPLATES = [
+        { t: "📊 투표·설문 위젯", p: "방문자들이 참여하는 실시간 투표 위젯을 만들어줘. 선택지에 투표하면 막대그래프로 비율이 보이고, 결과는 모두에게 공유돼." },
+        { t: "⏰ D-day 카드", p: "여러 일정을 입력하면 마감까지 남은 일수를 카드로 보여주는 위젯. 임박한 건 빨강으로 강조하고 정렬해줘." },
+        { t: "🎮 미니 게임", p: "키보드로 하는 간단한 반응속도 게임을 만들어줘. 점수와 최고기록을 보여주고 다시하기 버튼도." },
+        { t: "🧮 계산기", p: "예쁜 공학용 계산기를 만들어줘. 다크모드, 키보드 입력 지원, 계산 기록도 보여줘." },
+        { t: "📝 방명록", p: "방문자가 이름과 메시지를 남기는 방명록을 만들어줘. 남긴 글은 모두에게 공유되고 최신순으로 보여." },
+        { t: "🎨 그림판", p: "마우스로 그리는 간단한 그림판. 색·굵기 선택, 지우개, PNG로 저장 버튼." },
+      ];
+
+      let me = null, canCreate = false, busy = false, mode = "app";
+      let currentHtml = "", versions = [], curVer = -1, chatTurns = [], images = [];
+      let lastSlug = "", forkedFrom = null, defaultTitle = "";
+      let appModels = { models: ["auto"], default: "auto" };
+      let imageModels = { models: ["auto"], default: "auto", std: "gpt-image-1", high: "gpt-image-2" };
+      function modelLabel(x, forImage) {
+        if (x === "auto") return forImage ? "⚡ 자동(작업 보고 선택)" : "⚡ 자동(비용 최소)";
+        if (forImage) {
+          if (x === imageModels.high) return x + " · 고화질";
+          if (x === imageModels.std) return x + " · 표준";
+        }
+        return x;
+      }
+      function populateModels(forImage) {
+        const src = forImage ? imageModels : appModels;
+        const list = (src.models && src.models.length) ? src.models : ["auto"];
+        $("model").innerHTML = list.map((x) => `<option value="${x}"${x === src.default ? " selected" : ""}>${modelLabel(x, forImage)}</option>`).join("");
+      }
+
+      // 생성/업로드한 이미지를 그대로 게시할 수 있도록 한 장짜리 HTML 로 감싼다.
+      function imageWrapper(url, title) {
+        const t = esc(title || "이미지");
+        return '<!doctype html><html lang="ko"><head><meta charset="utf-8">' +
+          '<meta name="viewport" content="width=device-width,initial-scale=1"><title>' + t + '</title>' +
+          '<style>html,body{margin:0;height:100%;background:#0b0d12}.w{height:100%;display:flex;align-items:center;justify-content:center;padding:10px;box-sizing:border-box}' +
+          'img{max-width:100%;max-height:100vh;object-fit:contain;border-radius:10px}</style>' +
+          '</head><body><div class="w"><img src="' + url + '" alt="' + t + '"></div></body></html>';
+      }
+      function setMode(m) {
+        mode = m;
+        $("modeseg").querySelectorAll("[data-mode]").forEach((b) => b.classList.toggle("on", b.dataset.mode === m));
+        $("prompt").placeholder = m === "image"
+          ? "만들 이미지를 설명하세요 (예: 비커 아이콘, 플랫 · Enter 전송)"
+          : "무엇을 만들까요? (Enter 전송 · Shift+Enter 줄바꿈)";
+        $("imgBtn").title = m === "image" ? "내 이미지 업로드해서 게시" : "이미지 추가(생성·업로드)";
+        $("chips").style.display = m === "image" ? "none" : "flex";
+        populateModels(m === "image");
+      }
+      function imagePostBubble(bubble, url, verIdx, kind, info) {
+        bubble.dataset.thinking = "";
+        bubble.innerHTML = '<img src="' + esc(url) + '"/>' + (kind || "이미지를 만들었어요!") +
+          ' 오른쪽에서 확인하고 <b>게시</b>하세요.<div class="meta"><span class="ck cur" data-ver="' + verIdx + '">✓ 버전 ' + (verIdx + 1) + "</span>" +
+          (info ? '<span class="mdl">' + esc(info) + "</span>" : "") + "</div>";
+        bindCheckpoints(); markCurrentCheckpoint(); $("msgs").scrollTop = $("msgs").scrollHeight;
+      }
+      async function genImagePost(prompt) {
+        addMsg("user", esc(prompt)); $("prompt").value = ""; autoGrow();
+        busy = true; updateSendUI();
+        const thinking = addMsg("ai", `<span class="spin"></span> 이미지 만드는 중… (고화질은 조금 더 걸려요)`, true);
+        try {
+          const j = await api("/api/artifacts/image", { method: "POST", body: JSON.stringify({ prompt, model: $("model").value }) });
+          const html = imageWrapper(j.url, prompt);
+          const vi = pushVersion(html, "이미지", prompt); setHtml(html);
+          if (!defaultTitle) defaultTitle = prompt.slice(0, 30);
+          const info = (j.model || "") + (j.tier === "high" ? " · 고화질" : " · 표준") + (j.auto ? " · 자동" : "") + (j.fallback ? " · 폴백" : "");
+          imagePostBubble(thinking, j.url, vi, "이미지를 만들었어요!", info);
+        } catch (e) {
+          thinking.dataset.thinking = "";
+          thinking.innerHTML = "⚠ " + esc(e.status === 429 ? "오늘 사용 한도를 다 썼어요." : (e.message || "이미지 생성 실패"));
+        } finally { busy = false; updateSendUI(); }
+      }
+
+      async function api(path, opts) {
+        const r = await fetch(path, { credentials: "same-origin", headers: { "Content-Type": "application/json" }, ...opts });
+        let j = null; try { j = await r.json(); } catch {}
+        if (!r.ok) { const e = new Error((j && j.error) || r.status); e.status = r.status; throw e; }
+        return j;
+      }
+      function showGate(html) { $("gate").innerHTML = html; $("gate").style.display = "flex"; $("app").style.display = "none"; }
+
+      // ── 채팅 렌더 ──
+      function renderEmpty() {
+        const tpls = TEMPLATES.map((x, i) => `<button data-tpl="${i}"><b>${esc(x.t)}</b><span>${esc(x.p.slice(0, 38))}…</span></button>`).join("");
+        $("msgs").innerHTML =
+          `<div class="empty"><h3>✨ 무엇이든 만들어 보세요</h3>` +
+          `<div>아이디어를 적고 ↑ 를 누르면 AI가 웹앱·위젯·도구를 만들어 줘요. 그다음엔 대화하듯 "<b>다크모드로</b>", "<b>버튼 더 크게</b>" 처럼 고쳐 나가면 됩니다.</div>` +
+          `<div class="tpl">${tpls}</div></div>`;
+        $("msgs").querySelectorAll("[data-tpl]").forEach((b) => b.onclick = () => { const x = TEMPLATES[+b.dataset.tpl]; $("prompt").value = x.p; send(); });
+      }
+      function addMsg(role, html, thinking) {
+        const empty = $("msgs").querySelector(".empty"); if (empty) empty.remove();
+        const d = document.createElement("div");
+        d.className = "msg " + role; d.innerHTML = html;
+        if (thinking) d.dataset.thinking = "1";
+        $("msgs").appendChild(d); $("msgs").scrollTop = $("msgs").scrollHeight;
+        return d;
+      }
+      function aiSuccess(bubble, summary, verIdx, model, auto) {
+        bubble.dataset.thinking = "";
+        bubble.innerHTML =
+          esc(summary || "완성했어요!") +
+          `<div class="meta"><span class="ck cur" data-ver="${verIdx}">✓ 버전 ${verIdx + 1}</span>` +
+          `<span class="mdl">${esc(model || "")}${auto ? " · 자동" : ""}</span></div>`;
+        bindCheckpoints();
+        markCurrentCheckpoint();
+      }
+      function bindCheckpoints() {
+        $("msgs").querySelectorAll(".ck[data-ver]").forEach((c) => c.onclick = () => gotoVersion(+c.dataset.ver));
+      }
+      function markCurrentCheckpoint() {
+        $("msgs").querySelectorAll(".ck[data-ver]").forEach((c) => c.classList.toggle("cur", +c.dataset.ver === curVer));
+      }
+
+      // ── 버전/미리보기 ──
+      function pushVersion(html, summary, prompt) {
+        versions.push({ html, summary, prompt }); if (versions.length > 40) versions.shift();
+        curVer = versions.length - 1; updateUndo(); return curVer;
+      }
+      function gotoVersion(i) {
+        if (i < 0 || i >= versions.length) return;
+        curVer = i; setHtml(versions[i].html, true); markCurrentCheckpoint(); updateUndo();
+      }
+      function updateUndo() { $("undoBtn").disabled = curVer <= 0; }
+      function setHtml(html, fromVersion) {
+        currentHtml = html || "";
+        renderPreview();
+        if (monaco && editor && editor.getValue() !== currentHtml) editor.setValue(currentHtml);
+        const has = !!currentHtml;
+        $("openPublish").disabled = !has; $("refresh").disabled = !has; $("popout").disabled = !has;
+        $("toStage").style.display = has ? "" : "none";
+      }
+      function renderPreview() {
+        $("preview").srcdoc = currentHtml ||
+          "<!doctype html><meta charset=utf-8><body style='font-family:sans-serif;color:#9aa1b2;display:grid;place-items:center;height:90vh;margin:0'>왼쪽 채팅에서 만들고 싶은 걸 적어보세요.</body>";
+      }
+
+      // ── 빌드(채팅 전송) ──
+      function updateSendUI() {
+        $("sendBtn").disabled = busy; $("imgBtn").disabled = busy;
+        $("chips").querySelectorAll("button").forEach((b) => b.disabled = busy || !currentHtml);
+      }
+      async function send(textOverride) {
+        if (busy) return;
+        const prompt = (textOverride != null ? textOverride : $("prompt").value).trim();
+        if (!prompt) return;
+        if (mode === "image") return genImagePost(prompt);
+        addMsg("user", esc(prompt));
+        if (textOverride == null) $("prompt").value = "";
+        autoGrow();
+        busy = true; updateSendUI();
+        const thinking = addMsg("ai", `<span class="spin"></span> 만드는 중… (20~60초)`, true);
+        try {
+          const body = { prompt, model: $("model").value, summary: true };
+          if (currentHtml) body.currentHtml = currentHtml;
+          if (images.length) body.images = images.slice();
+          if (chatTurns.length) body.history = chatTurns.slice(-8);
+          const j = await api("/api/artifacts/build", { method: "POST", body: JSON.stringify(body) });
+          chatTurns.push({ role: "user", content: prompt }, { role: "assistant", content: j.summary || "(완성)" });
+          const vi = pushVersion(j.html, j.summary, prompt);
+          setHtml(j.html);
+          aiSuccess(thinking, j.summary, vi, j.model, j.auto);
+          if (!defaultTitle) defaultTitle = prompt.slice(0, 30);
+          images = []; renderThumbs();
+          $("msgs").scrollTop = $("msgs").scrollHeight;
+        } catch (e) {
+          thinking.dataset.thinking = "";
+          thinking.innerHTML = "⚠ " + esc(e.status === 429 ? "오늘 사용 한도를 다 썼어요. 내일 다시 시도해 주세요." : (e.message || "생성 실패"));
+        } finally {
+          busy = false; updateSendUI();
+        }
+      }
+
+      // ── Monaco (코드 탭) ──
+      let monaco = null, editor = null, monacoLoading = null, codeT = null;
+      const MB = "https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0/min/";
+      function loadMonaco() {
+        if (monacoLoading) return monacoLoading;
+        monacoLoading = new Promise((resolve, reject) => {
+          window.MonacoEnvironment = { getWorkerUrl: () => "data:text/javascript;charset=utf-8," + encodeURIComponent("self.MonacoEnvironment={baseUrl:'" + MB + "'};importScripts('" + MB + "vs/base/worker/workerMain.js');") };
+          try { require.config({ paths: { vs: MB + "vs" } }); require(["vs/editor/editor.main"], () => resolve(window.monaco)); }
+          catch (e) { reject(e); }
+        });
+        return monacoLoading;
+      }
+      async function openCode() {
+        $("stage").classList.add("codeon");
+        if (!editor) {
+          $("monacoHost").innerHTML = '<div class="placeholder">에디터 로딩 중…</div>';
+          try {
+            monaco = await loadMonaco();
+            $("monacoHost").innerHTML = "";
+            editor = monaco.editor.create($("monacoHost"), {
+              value: currentHtml, language: "html", theme: "vs-dark", automaticLayout: true,
+              fontSize: 13, minimap: { enabled: false }, wordWrap: "on", scrollBeyondLastLine: false, tabSize: 2,
+            });
+            editor.onDidChangeModelContent(() => { clearTimeout(codeT); codeT = setTimeout(() => { currentHtml = editor.getValue(); renderPreview(); $("openPublish").disabled = !currentHtml; }, 500); });
+          } catch (e) { $("monacoHost").innerHTML = '<div class="placeholder">에디터 로드 실패: ' + esc(e.message || e) + "</div>"; }
+        } else if (editor.getValue() !== currentHtml) { editor.setValue(currentHtml); }
+      }
+      function showTab(which) {
+        const code = which === "code";
+        $("tabs").querySelectorAll("[data-tab]").forEach((b) => b.classList.toggle("on", b.dataset.tab === which));
+        if (code) openCode(); else { $("stage").classList.remove("codeon"); renderPreview(); }
+      }
+
+      // ── 이미지 첨부 ──
+      function renderThumbs() {
+        $("thumbs").innerHTML = images.map((u, i) => `<span class="t"><img src="${esc(u)}"/><button class="rm" data-rm="${i}">×</button></span>`).join("");
+        $("thumbs").querySelectorAll("[data-rm]").forEach((b) => b.onclick = () => { images.splice(+b.dataset.rm, 1); renderThumbs(); });
+      }
+      async function imgMenu() {
+        const what = prompt("이미지 추가\n\n1) 설명을 적으면 AI가 생성\n2) 비우고 확인하면 파일 업로드", "");
+        if (what === null) return;
+        if (!what.trim()) { $("imgFile").click(); return; }
+        $("instatus").innerHTML = `<span class="spin"></span> 이미지 생성 중…`;
+        try { const j = await api("/api/artifacts/image", { method: "POST", body: JSON.stringify({ prompt: what.trim() }) }); images.push(j.url); renderThumbs(); $("instatus").textContent = "이미지 추가됨 — 다음 메시지에 반영돼요."; }
+        catch (e) { $("instatus").textContent = "오류: " + e.message; }
+      }
+      function uploadImg() {
+        const f = $("imgFile").files[0]; if (!f) return;
+        const rd = new FileReader();
+        rd.onload = async () => {
+          $("instatus").innerHTML = `<span class="spin"></span> 업로드 중…`;
+          try {
+            const j = await api("/api/artifacts/upload", { method: "POST", body: JSON.stringify({ dataUrl: rd.result }) });
+            if (mode === "image") {
+              // 이미지 모드: 올린 이미지를 바로 게시 가능한 작품으로
+              const html = imageWrapper(j.url, f.name);
+              const vi = pushVersion(html, "업로드 이미지", f.name); setHtml(html);
+              if (!defaultTitle) defaultTitle = (f.name || "이미지").replace(/\.[^.]+$/, "");
+              imagePostBubble(addMsg("ai", "", true), j.url, vi, "이미지를 올렸어요!");
+              $("instatus").textContent = "";
+            } else {
+              images.push(j.url); renderThumbs(); $("instatus").textContent = "이미지 추가됨.";
+            }
+          } catch (e) { $("instatus").textContent = "오류: " + e.message; }
+        };
+        rd.readAsDataURL(f); $("imgFile").value = "";
+      }
+
+      // ── 게시 ──
+      function openPublish() {
+        if (!currentHtml) return;
+        $("pTitle").value = $("pTitle").value || defaultTitle || "";
+        $("pCat").innerHTML = CATS.map((c) => `<option>${c}</option>`).join("");
+        if (mode === "image") $("pCat").value = "이미지";
+        $("pubStatus").innerHTML = ""; $("pubModal").classList.add("on");
+      }
+      async function doPublish() {
+        if (!currentHtml) return;
+        $("pDo").disabled = true; $("pubStatus").innerHTML = `<span class="spin"></span> 게시 중…`;
+        try {
+          const slug = $("pSlug").value.trim();
+          const j = await api("/api/artifacts", { method: "POST", body: JSON.stringify({
+            title: $("pTitle").value.trim(), slug, html: currentHtml, isPublic: $("pPublic").checked,
+            category: $("pCat").value, forkedFrom, overwrite: slug && slug === lastSlug,
+          }) });
+          lastSlug = j.slug; forkedFrom = null;
+          const full = location.origin + j.url;
+          $("pSlug").value = j.slug;
+          $("pubStatus").innerHTML = `✅ 게시됨 → <a href="${j.url}" target="_blank">${esc(full)}</a>` + (j.persistent ? "" : " <span style='color:#9aa1b4'>(임시저장)</span>");
+        } catch (e) { $("pubStatus").innerHTML = "⚠ " + esc(e.message); }
+        finally { $("pDo").disabled = false; }
+      }
+
+      // ── 입력 UX ──
+      function autoGrow() { const t = $("prompt"); t.style.height = "auto"; t.style.height = Math.min(160, t.scrollHeight) + "px"; }
+
+      // ── 초기화 ──
+      async function loadParamArtifact() {
+        const q = new URLSearchParams(location.search);
+        const edit = q.get("edit"), remix = q.get("remix");
+        try {
+          if (edit) {
+            const j = await api("/api/artifacts/" + encodeURIComponent(edit) + "/raw");
+            lastSlug = j.slug; defaultTitle = j.title || ""; $("pTitle").value = j.title || ""; $("pSlug").value = j.slug || ""; $("pPublic").checked = !!j.is_public;
+            pushVersion(j.html, "불러온 작품", "(편집)"); setHtml(j.html);
+            addMsg("ai", `📂 <b>${esc(j.title || j.slug)}</b> 를 불러왔어요. 고치고 싶은 점을 말해주세요.`);
+            bindCheckpoints(); markCurrentCheckpoint();
+          } else if (remix) {
+            const j = await api("/api/artifacts/" + encodeURIComponent(remix) + "/remix");
+            defaultTitle = j.title || ""; forkedFrom = j.forkedFrom || remix;
+            pushVersion(j.html, "리믹스 원본", "(리믹스)"); setHtml(j.html);
+            addMsg("ai", `🔀 <b>${esc(j.title || remix)}</b> 를 리믹스로 불러왔어요. 마음대로 바꿔서 새 작품으로 게시하세요.`);
+            bindCheckpoints(); markCurrentCheckpoint();
+          } else { renderEmpty(); return; }
+        } catch (e) { renderEmpty(); addMsg("ai", "⚠ 불러오기 실패: " + esc(e.message)); }
+      }
+
+      async function init() {
+        try {
+          const meR = await fetch("/api/me"); me = meR.ok ? await meR.json() : null;
+          const b = await api("/api/me/beta");
+          canCreate = !!b.admin || (Array.isArray(b.features) && b.features.includes("create"));
+        } catch (e) { canCreate = false; }
+        if (!canCreate) {
+          showGate(me
+            ? '🧩 <b>스튜디오</b>는 현재 <b>베타 사용자</b>에게만 열려 있어요.<br>갤러리는 누구나 구경할 수 있습니다.<br><div style="margin-top:12px"><a class="btn sec" href="/create.html">갤러리 보기</a></div>'
+            : '로그인 후 <b>베타 사용자</b>에게 열립니다.<br><div style="margin-top:12px"><a class="btn" href="/login.html">로그인</a> <a class="btn sec" href="/create.html">갤러리 보기</a></div>');
+          return;
+        }
+        $("gate").style.display = "none"; $("app").style.display = "flex";
+        // 모델 목록(앱 빌드 + 이미지 생성)
+        try { appModels = await api("/api/artifacts/models"); } catch {}
+        try { const im = await api("/api/artifacts/image-models"); if (im && im.models && im.models.length) imageModels = im; } catch {}
+        populateModels(false);
+        // 칩
+        $("chips").innerHTML = CHIPS.map((c) => `<button disabled>${esc(c)}</button>`).join("");
+        $("chips").querySelectorAll("button").forEach((b) => b.onclick = () => { if (!currentHtml || busy) return; send(b.textContent.replace(/^\S+\s/, "")); });
+        renderPreview();
+        await loadParamArtifact();
+        updateSendUI();
+      }
+
+      // 이벤트 바인딩
+      $("sendBtn").onclick = () => send();
+      $("prompt").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
+      $("prompt").addEventListener("input", autoGrow);
+      $("imgBtn").onclick = () => { if (mode === "image") $("imgFile").click(); else imgMenu(); };
+      $("imgFile").onchange = uploadImg;
+      $("modeseg").querySelectorAll("[data-mode]").forEach((b) => b.onclick = () => setMode(b.dataset.mode));
+      $("tabs").querySelectorAll("[data-tab]").forEach((b) => b.onclick = () => showTab(b.dataset.tab));
+      $("devseg").querySelectorAll("[data-dev]").forEach((b) => b.onclick = () => { $("devseg").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b)); $("pvhost").classList.toggle("mobile", b.dataset.dev === "mobile"); });
+      $("refresh").onclick = renderPreview;
+      $("undoBtn").onclick = () => gotoVersion(curVer - 1);
+      function openSandboxedPopout() {
+        if (!currentHtml) return;
+        const w = window.open("", "_blank");
+        if (!w) return;
+        const html = JSON.stringify(currentHtml);
+        w.document.open();
+        w.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Quilo Preview</title><style>html,body{margin:0;width:100%;height:100%;background:#fff}iframe{display:block;width:100%;height:100%;border:0}</style></head><body><iframe id="pv" sandbox="allow-scripts allow-forms allow-popups allow-modals"></iframe><script>document.getElementById("pv").srcdoc=${html};<\/script></body></html>`);
+        w.document.close();
+      }
+      $("popout").onclick = openSandboxedPopout;
+      $("toStage").onclick = () => $("app").classList.add("showstage");
+      $("openPublish").onclick = openPublish;
+      $("pCancel").onclick = () => $("pubModal").classList.remove("on");
+      $("pDo").onclick = doPublish;
+      $("pubModal").onclick = (e) => { if (e.target === $("pubModal")) $("pubModal").classList.remove("on"); };
+
+      init();
+    </script>
+  </body>
+</html>

@@ -261,8 +261,20 @@
   // .hwpx로 변환한 뒤, 기존 HWPX 파이프라인(HwpxConvert.convertFile)으로 수식을 바꾼다.
   // 모든 처리는 브라우저 안에서 일어나며(서버 업로드 없음), 결과물은 .hwpx 다.
   // postMessage 프로토콜은 rhwp의 임베드 에디터(npm/editor) 규약을 따른다.
+  function confirmRhwpTransfer(file) {
+    return window.confirm(
+      '.hwp 파일은 브라우저 안에서 변환하기 위해 외부 rhwp 페이지(https://edwardkim.github.io) iframe으로 파일 바이트를 전달합니다.\n\n' +
+      'Quilo 서버에는 업로드하지 않지만, 문서에 개인정보나 민감한 내용이 있으면 전송 전 꼭 확인하세요.\n\n' +
+      '선택한 파일: ' + file.name + '\n\n계속할까요?'
+    );
+  }
+
   function convertHwpViaRhwp(file) {
     var RHWP_URL = 'https://edwardkim.github.io/rhwp/';
+    var RHWP_ORIGIN = new URL(RHWP_URL).origin;
+    if (!confirmRhwpTransfer(file)) {
+      return Promise.reject(new Error('외부 rhwp 변환 전송이 취소되었습니다.'));
+    }
     return file.arrayBuffer().then(function (buf) {
       return new Promise(function (resolve, reject) {
         var iframe = document.createElement('iframe');
@@ -276,13 +288,14 @@
           return new Promise(function (res, rej) {
             var id = ++reqId;
             pending.set(id, { resolve: res, reject: rej });
-            iframe.contentWindow.postMessage({ type: 'rhwp-request', id: id, method: method, params: params || {} }, '*');
+            iframe.contentWindow.postMessage({ type: 'rhwp-request', id: id, method: method, params: params || {} }, RHWP_ORIGIN);
             setTimeout(function () {
               if (pending.has(id)) { pending.delete(id); rej(new Error('rhwp 응답 시간 초과: ' + method)); }
             }, 30000);
           });
         }
         function onMessage(e) {
+          if (e.origin !== RHWP_ORIGIN || e.source !== iframe.contentWindow) return;
           if (e.data && e.data.type === 'rhwp-response' && e.data.id != null) {
             var r = pending.get(e.data.id);
             if (r) {

@@ -109,7 +109,7 @@ HWPX 출력은 Python 의존성이 필요하다. Render 빌드에서 `.venv` 생
 | `date` | text | 필수 UI | 실험 날짜 |
 | `temperature` | text/number | 선택 | 실험 온도 |
 | `pressure` | text/number | 선택 | 기압 |
-| `model` | text | 선택 | 현재 서버 whitelist상 `claude-opus-4-8`만 허용 |
+| `model` | text | 선택 | 서버 whitelist: `claude-opus-4-8`(기본)·`claude-sonnet-4-6`·GPT(`gpt-5.5`/`gpt-5.4`/`gpt-5.4-mini`) |
 | `format` | text | 선택 | `docx` 또는 `hwpx` |
 | `style` | text | 선택 | `default` 또는 `minimal` |
 | `fontFace` | text | 선택 | 출력 글꼴 |
@@ -164,7 +164,7 @@ HWPX 출력은 Python 의존성이 필요하다. Render 빌드에서 `.venv` 생
 - `photos`는 여러 장 허용
 - `manual`은 선택 입력
 - `style`은 `minimal`일 때만 minimal, 그 외는 default
-- `userNotes`는 최대 2000자
+- `userNotes`는 `collectUserNotes()`→`normalizeUserNotes()`로 최대 `MAX_USER_NOTES_CHARS`자(기본 12000). `.md`/`.txt` 메모 파일도 합쳐진다.
 
 ## 8. 중요한 현재 한계
 

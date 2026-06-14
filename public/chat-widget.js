@@ -33,6 +33,18 @@
   var openedOnce = false;
   var currentMode = "help"; // 'help' | 'memo' | 'style'
   var memoTarget = null; // 메모/스타일을 넣을 textarea id (폼/설정에서 열었을 때)
+  var memoReportType = ""; // 메모를 어느 보고서 폼에서 열었는지(종류별 안내용)
+
+  // textarea id 접두사 → 보고서 종류 매핑
+  function reportTypeFromTarget(id) {
+    id = String(id || "");
+    if (id.indexOf("pre") === 0) return "chem-pre";
+    if (id.indexOf("cr") === 0) return "chem-result";
+    if (id.indexOf("pr") === 0) return "phys-result";
+    if (id.indexOf("pi") === 0) return "phys-inquiry";
+    if (id.indexOf("mi") === 0) return "math-inquiry";
+    return "";
+  }
   var waEnabled = false; // 유료 글쓰기 도우미(Sonnet/GPT) + 로그인 사용 가능
   var helpEnabled = false; // 일반 사용법 도우미(Groq)
   var waModels = []; // [{id,label}]
@@ -318,6 +330,7 @@
       mode: isAssist() ? "memo" : currentMode,
       context: pageContext(),
     };
+    if (currentMode === "memo" && memoReportType) body.reportType = memoReportType;
     // 메모/스타일 모드 + 유료 도우미 사용 가능 → Sonnet/GPT 라우팅
     if (isAssist()) {
       body.assistKind = currentMode === "style" ? "style" : "memo";
@@ -569,6 +582,7 @@
   window.Quilo.openMemo = function (targetId, kind) {
     if (!panel) return; // 위젯이 꺼져 있으면 무시
     memoTarget = targetId || null;
+    memoReportType = kind === "style" ? "" : reportTypeFromTarget(targetId);
     openedOnce = true;
     panel.classList.add("open");
     setMode(kind === "style" ? "style" : "memo");

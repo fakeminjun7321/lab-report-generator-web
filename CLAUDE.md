@@ -16,7 +16,7 @@
 - 서버 엔트리: `server.js`
 - 핵심 파이프라인: `lib/pipelines/chem-pre/`, `lib/pipelines/chem-result/`, `lib/pipelines/phys-result/`
 - 출력 형식: `.docx`, `.hwpx`
-- 현재 허용 모델: `claude-opus-4-8`
+- 현재 허용 모델: `claude-opus-4-8`(기본, 3크레딧), `claude-sonnet-4-6`(1크레딧). `chem-pre`/`chem-result`/`phys-result`는 GPT(`gpt-5.5` 3 / `gpt-5.4` 2 / `gpt-5.4-mini` 1)도 선택 가능.
 
 ## 핵심 파일
 
@@ -84,7 +84,7 @@
 - `format`: `docx` 또는 `hwpx`
 - `fontFace`: 출력 글꼴
 - `userNotes`: AI 참고 메모 / 실험자 의견
-- `model`: 현재 `claude-opus-4-8`만 허용
+- `model`: `claude-opus-4-8`(기본) 또는 `claude-sonnet-4-6`. 화학/물리 결과·사전 타입은 GPT(`gpt-5.5`/`gpt-5.4`/`gpt-5.4-mini`)도 허용. 화이트리스트는 `server.js`의 `ALLOWED_MODELS` + `GPT_REPORT_MODELS`.
 
 ## 서버 실행 흐름
 
